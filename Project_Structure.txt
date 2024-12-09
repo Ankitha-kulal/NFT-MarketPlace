@@ -1,0 +1,22 @@
+NFT-Marketplace/
+│
+├── contracts/             # Solidity smart contracts
+│   ├── NFTMarketplace.sol  # Main contract for NFT marketplace
+│   └── ...                # Other smart contracts (if needed)
+│
+├── scripts/               # Deployment and interaction scripts
+│   └── deploy.js          # Script to deploy contracts to blockchain
+│
+├── test/                  # Smart contract test files
+│   ├── NFTMarketplace.test.js
+│   └── ...                # Other test files
+│
+├── frontend/              # React-based frontend (same as before)
+│   ├── public/            # Static files for the web app
+│   ├── src/               # Main source files for React app
+│   └── ...                # Other frontend files
+│
+├── hardhat.config.js      # Hardhat configuration file
+├── README.md              # Documentation for the project
+├── .gitignore             # Files to ignore in version control
+└── LICENSE                # Open-source license (if applicable)
