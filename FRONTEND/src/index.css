@@ -1,0 +1,64 @@
+body {
+  background: linear-gradient(to right, rgb(184, 212, 184), rgb(211, 196, 196));
+  color: white;
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+}
+.nav-wrapper ul li i.material-icons {
+  vertical-align: middle;
+  font-size: 24px;
+}
+
+.center-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100vh;
+}
+/* 3D Card Effect */
+.unique-card-3d-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.unique-card-3d {
+  width: 350px;
+  height: 150px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 20px;
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+  background-color: #fff;
+  padding: 20px;
+  cursor: pointer;
+}
+
+/* Removed hover animation on 3D card */
+
+/* Button Styling */
+.unique-connect-btn {
+  width: 100%;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #ff9800;
+  border: none;
+  border-radius: 15px;
+  color: #fff;
+  font-weight: bold;
+  font-size: 18px;
+  padding: 0 20px;
+}
+
+/* Removed hover animation on button */
+
+/* Removed focus outline */
+.unique-connect-btn:focus {
+  outline: none;
+}
