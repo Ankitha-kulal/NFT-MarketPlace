@@ -43,7 +43,7 @@ contract NFTMarkletplace is ERC721URIStorage{
     }
 
     constructor() ERC721("NFT Metavarse Token","MYNFT"){
-        owner == payable(msg.sender);
+        owner = payable(msg.sender);
     }
 
     function updateListingPrice(uint256 _listingPrice) public payable onlyOwner{
@@ -147,7 +147,7 @@ contract NFTMarkletplace is ERC721URIStorage{
     }
 
     // PURCHASE ITEM
-    fucntion fetchMyNFT() public view returns(MarketItem[] memory){
+    function fetchMyNFT() public view returns(MarketItem[] memory){
         uint256 totalCount = _tokenIds.current();
         uint256 itemCount = 0;
         uint256 currentIndex = 0;
@@ -158,7 +158,7 @@ contract NFTMarkletplace is ERC721URIStorage{
         }
     }
 
-    MarketItem[] memory itmes=new MarketItem[](itemCount);
+    MarketItem[] memory items=new MarketItem[](itemCount);
     for(uint256 i = 0; i<totalCount; i++){
 
         if(idMarketItem[i+1].owner == msg.sender){
