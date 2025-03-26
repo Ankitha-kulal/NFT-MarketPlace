@@ -1,0 +1,54 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Database & Supabase-related files
+supabase/.temp/
+supabase/.cache/
+supabase/migrations/
+supabase/.env
+supabase/db/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build files
+dist/
+build/
+coverage/
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Misc
+*.bak
+*.tmp
+
+####
+myinfo.text
