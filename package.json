@@ -1,0 +1,22 @@
+{
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.2.0",
+    "@supabase/supabase-js": "^2.49.3",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.13.5"
+  },
+  "name": "nft-marketplace",
+  "description": "The database should store and manage all key data for users, NFTs, transactions, and more. Here’s an overview of the entities:",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "chai": "^5.2.0",
+    "hardhat": "^2.22.19"
+  }
+}
