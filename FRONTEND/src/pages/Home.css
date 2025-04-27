@@ -1,0 +1,186 @@
+/* Background and layout */
+.home-container {
+    min-height: 100vh;
+    background: linear-gradient(to bottom right, #22543d, #1a202c);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 1rem;
+  }
+  
+  .home-content {
+    max-width: 56rem;
+    text-align: center;
+  }
+  
+  /* Badge */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    background-color: rgba(39, 103, 73, 0.5);
+    border-radius: 9999px;
+    padding: 0.5rem 1rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .badge-icon {
+    color: #9ae6b4;
+    margin-right: 0.5rem;
+  }
+  
+  .badge-text {
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+  
+  /* Headings and text */
+  .main-heading {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 1.5rem;
+    line-height: 1.2;
+  }
+  
+  .highlight {
+    background: linear-gradient(to right, #9ae6b4, #68d391);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .main-description {
+    font-size: 1.125rem;
+    color: #a0aec0;
+    margin-bottom: 2rem;
+    max-width: 40rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  /* Buttons */
+  .button-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .get-started-btn {
+    background: linear-gradient(to right, #38a169, #48bb78);
+    color: white;
+    font-weight: 600;
+    padding: 0.75rem 2rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+  
+  .get-started-btn:hover {
+    background: linear-gradient(to right, #2f855a, #38a169);
+  }
+  
+  .learn-more-btn {
+    background: transparent;
+    border: 2px solid #68d391;
+    color: #9ae6b4;
+    font-weight: 600;
+    padding: 0.75rem 2rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+  
+  .learn-more-btn:hover {
+    background-color: #22543d;
+  }
+
+
+  .stats-overlay{
+
+  }
+  
+
+
+  /* Responsive adjustments */
+  @media (min-width: 640px) {
+    .button-group {
+      flex-direction: row;
+      justify-content: center;
+    }
+  }
+  
+  @media (min-width: 768px) {
+    .main-heading {
+      font-size: 3.75rem;
+    }
+  
+    .main-description {
+      font-size: 1.25rem;
+    }
+  }
+  
+  /* Featured Preview */
+  .featured-preview {
+    position: relative;
+    margin-top: 3rem;
+    margin-bottom: 2rem;
+  }
+  
+  .preview-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, #22543d, transparent);
+    z-index: 10;
+    border-radius: 0.75rem;
+  }
+  
+  .preview-image {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  }
+  
+  /* Stats overlay */
+  .stats-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-around;
+    padding: 1.5rem;
+    z-index: 20;
+  }
+  
+  .stat-item {
+    text-align: center;
+  }
+  
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #9ae6b4;
+  }
+  
+  .stat-label {
+    font-size: 0.875rem;
+    color: #a0aec0;
+  }
+  
+  /* Footer */
+  .footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    font-size: 0.875rem;
+    color: #718096;
+    margin-top: 1.5rem;
+  }
+  

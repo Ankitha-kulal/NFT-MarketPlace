@@ -1,16 +1,50 @@
 import React from 'react';
+import { Sparkles, ArrowRight } from 'lucide-react';
+import './Home.css';
 
 const Home = () => {
   return (
-    <center>
-      <div className="container center-container">
-        <br/>
-        <img src="/images/nft-banner.jpg" alt="NFT Banner" className="responsive-img" width="600" height="300" />
-        <h3>Welcome to NFT Platform</h3>
-        <p>Explore the marketplace and manage your NFTs easily.</p>
-        <button className="btn blue darken-3">Get Started</button>
+    <div className="home-container">
+      <div className="home-content">
+        {/* Badge */}
+        <div className="badge">
+          <Sparkles size={16} className="badge-icon" />
+          <span className="badge-text">The Future of Digital Collectibles</span>
+        </div>
+
+        {/* Heading */}
+        <h1 className="main-heading">
+          Discover & Collect <span className="highlight">Extraordinary</span> NFTs
+        </h1>
+        {/* Description */}
+        <p className="main-description">
+          Your premier marketplace for digital arts, gaming assets, and stunning photography collectibles. Own the uniqueness in the digital world.
+        </p>
+
+        {/* Buttons */}
+        <div className="button-group">
+          <button className="get-started-btn"
+          onClick={() => window.location.href = '/register'}
+          
+          >
+            Get Started
+            <ArrowRight size={20} style={{ marginLeft: '0.5rem' }} />
+          </button>
+          <button className="learn-more-btn">
+            Learn More
+          </button>
+        </div>
+
+       
+        {/* slider */}
+        
+
+        {/* Footer */}
+        <div className="footer">
+          © 2025 NFT Platform • The Home for Digital Collectibles
+        </div>
       </div>
-    </center>
+    </div>
   );
 };
 

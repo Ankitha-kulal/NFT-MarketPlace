@@ -17,31 +17,98 @@ import Profile from './pages/Profile';
 import ProfileEdit from './pages/ProfileEdit';
 import ResetPassword from './pages/ResetPassword';
 import WalletConnect from './pages/WalletConnect';
-
+import CompleteProfile from './pages/CompleteProfile';
+import VerifyEmail from './pages/verifyEmail';
+import ProtectedRoute from './components/ProtectedRoute';
+import { AuthProvider } from './context/AuthContext';
+import ProfileCompletionRoute from './components/ProfileCompletionRoute';
 import './index.css';
+import Register from './pages/Register';
 
 function App() {
   return (
-    <Router>
-      <Navbar />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/marketplace" element={<Marketplace />} />
-        <Route path="/explore" element={<Explore />} />
-        <Route path="/nft-collection" element={<NFTCollection />} />
-        <Route path="/nft-hub" element={<NFTHub />} />
-        <Route path="/nft-create" element={<NFTCreate />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/connect" element={<WalletConnect />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/change-password" element={<ChangePassword />} />
-        <Route path="/my-card" element={<MyCard />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/cart" element={<Cart />} />
-        <Route path="/bid" element={<Bid />} />
-        <Route path="/ProfileEdit" element={<ProfileEdit />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Navbar />
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/" element={<Home />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+
+          {/* Profile completion route (auth required, but no complete profile) */}
+          <Route path="/complete-profile" element={
+            <ProfileCompletionRoute>
+              <CompleteProfile />
+            </ProfileCompletionRoute>
+          } />
+
+          {/* Protected routes (auth required with complete profile) */}
+          <Route path="/marketplace" element={
+            <ProtectedRoute>
+              <Marketplace />
+            </ProtectedRoute>
+          } />
+          <Route path="/explore" element={
+            <ProtectedRoute>
+              <Explore />
+            </ProtectedRoute>
+          } />
+          <Route path="/nft-collection" element={
+            <ProtectedRoute>
+              <NFTCollection />
+            </ProtectedRoute>
+          } />
+          <Route path="/nft-hub" element={
+            <ProtectedRoute>
+              <NFTHub />
+            </ProtectedRoute>
+          } />
+          <Route path="/nft-create" element={
+            <ProtectedRoute>
+              <NFTCreate />
+            </ProtectedRoute>
+          } />
+          <Route path="/connect" element={
+            <ProtectedRoute>
+              <WalletConnect />
+            </ProtectedRoute>
+          } />
+          <Route path="/change-password" element={
+            <ProtectedRoute>
+              <ChangePassword />
+            </ProtectedRoute>
+          } />
+          <Route path="/my-card" element={
+            <ProtectedRoute>
+              <MyCard />
+            </ProtectedRoute>
+          } />
+          <Route path="/profile" element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          } />
+          <Route path="/cart" element={
+            <ProtectedRoute>
+              <Cart />
+            </ProtectedRoute>
+          } />
+          <Route path="/bid" element={
+            <ProtectedRoute>
+              <Bid />
+            </ProtectedRoute>
+          } />
+          <Route path="/ProfileEdit" element={
+            <ProtectedRoute>
+              <ProfileEdit />
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }
 
