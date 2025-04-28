@@ -1,5 +1,3 @@
-// FINAL CONTRACT FILE (SINGLE FILE)Not inherited from other fiels
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
@@ -20,12 +18,24 @@ contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
         bool isListed;
     }
     
+    struct Transaction {
+        address from;
+        address to;
+        uint256 price;
+        uint256 timestamp;
+        string transactionType; // "mint", "transfer", "sale"
+    }
+    
+    // Mapping from token ID to its transaction history
+    mapping(uint256 => Transaction[]) private _tokenTransactions;
+    
     mapping(uint256 => Listing) public listings;
     
     event NFTMinted(uint256 indexed tokenId, address indexed owner, string tokenURI);
     event NFTListed(uint256 indexed tokenId, uint256 price);
     event NFTSold(uint256 indexed tokenId, address indexed buyer, uint256 price);
     event ListingCancelled(uint256 indexed tokenId);
+    event TransactionRecorded(uint256 indexed tokenId, address from, address to, string transactionType);
 
     constructor() ERC721("MyNFT", "MNFT") {}
 
@@ -46,6 +56,9 @@ contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
         if(royaltyReceiver != address(0)) {
             _setTokenRoyalty(newTokenId, royaltyReceiver, royaltyFee);
         }
+        
+        // Record the minting transaction
+        _recordTransaction(newTokenId, address(0), msg.sender, 0, "mint");
 
         emit NFTMinted(newTokenId, msg.sender, tokenURI);
         return newTokenId;
@@ -69,6 +82,7 @@ contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
     /// @notice Buy a listed NFT
     function buyNFT(uint256 tokenId) external payable {
         Listing storage item = listings[tokenId];
+        address seller = item.seller;
 
         require(item.isListed, "Not listed for sale");
         require(msg.value >= item.price, "Insufficient payment");
@@ -82,8 +96,11 @@ contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
             payable(royaltyReceiver).transfer(royaltyAmount);
         }
         
-        payable(item.seller).transfer(sellerAmount);
-        _transfer(item.seller, msg.sender, tokenId);
+        payable(seller).transfer(sellerAmount);
+        _transfer(seller, msg.sender, tokenId);
+        
+        // Record the sale transaction
+        _recordTransaction(tokenId, seller, msg.sender, msg.value, "sale");
 
         emit NFTSold(tokenId, msg.sender, msg.value);
     }
@@ -115,6 +132,40 @@ contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
         (bool success, ) = payable(owner()).call{value: balance}("");
         require(success, "Transfer failed");
     }
+    
+    /// @notice Internal function to record token transactions
+    function _recordTransaction(
+        uint256 tokenId,
+        address from,
+        address to,
+        uint256 price,
+        string memory transactionType
+    ) internal {
+        Transaction memory newTransaction = Transaction({
+            from: from,
+            to: to,
+            price: price,
+            timestamp: block.timestamp,
+            transactionType: transactionType
+        });
+        
+        _tokenTransactions[tokenId].push(newTransaction);
+        emit TransactionRecorded(tokenId, from, to, transactionType);
+    }
+    
+    /// @notice Override _transfer to record token transfers
+    function _transfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal override {
+        super._transfer(from, to, tokenId);
+        
+        // Only record regular transfers (not sales, which are recorded separately)
+        if (!listings[tokenId].isListed) {
+            _recordTransaction(tokenId, from, to, 0, "transfer");
+        }
+    }
 
     /// @notice View function to get all NFTs currently for sale
     function getListedNFTs() external view returns (uint256[] memory tokenIds, uint256[] memory prices) {
@@ -143,6 +194,117 @@ contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
         }
         
         return (tokenIds, prices);
+    }
+    
+    /// @notice Get all NFTs owned by a specific address
+    function getNFTsByOwner(address owner) external view returns (uint256[] memory) {
+        uint256 totalSupply = _tokenIds.current();
+        uint256 ownedCount = 0;
+        
+        // Count owned tokens
+        for (uint256 i = 1; i <= totalSupply; i++) {
+            if (_exists(i) && ownerOf(i) == owner) {
+                ownedCount++;
+            }
+        }
+        
+        // Create array
+        uint256[] memory ownedTokens = new uint256[](ownedCount);
+        
+        // Populate array
+        uint256 currentIndex = 0;
+        for (uint256 i = 1; i <= totalSupply; i++) {
+            if (_exists(i) && ownerOf(i) == owner) {
+                ownedTokens[currentIndex] = i;
+                currentIndex++;
+            }
+        }
+        
+        return ownedTokens;
+    }
+    
+    /// @notice Get all NFTs created by a specific address
+    function getNFTsCreatedBy(address creator) external view returns (uint256[] memory) {
+        uint256 totalSupply = _tokenIds.current();
+        uint256 createdCount = 0;
+        
+        // Count created tokens
+        for (uint256 i = 1; i <= totalSupply; i++) {
+            if (_exists(i) && _tokenTransactions[i].length > 0 && _tokenTransactions[i][0].to == creator) {
+                createdCount++;
+            }
+        }
+        
+        // Create array
+        uint256[] memory createdTokens = new uint256[](createdCount);
+        
+        // Populate array
+        uint256 currentIndex = 0;
+        for (uint256 i = 1; i <= totalSupply; i++) {
+            if (_exists(i) && _tokenTransactions[i].length > 0 && _tokenTransactions[i][0].to == creator) {
+                createdTokens[currentIndex] = i;
+                currentIndex++;
+            }
+        }
+        
+        return createdTokens;
+    }
+    
+    /// @notice Get the full transaction history of a specific token
+    function getTokenTransactionHistory(uint256 tokenId) external view returns (
+        address[] memory fromAddresses,
+        address[] memory toAddresses,
+        uint256[] memory prices,
+        uint256[] memory timestamps,
+        string[] memory transactionTypes
+    ) {
+        require(_exists(tokenId), "Token does not exist");
+        
+        uint256 count = _tokenTransactions[tokenId].length;
+        
+        fromAddresses = new address[](count);
+        toAddresses = new address[](count);
+        prices = new uint256[](count);
+        timestamps = new uint256[](count);
+        transactionTypes = new string[](count);
+        
+        for (uint256 i = 0; i < count; i++) {
+            Transaction memory txn = _tokenTransactions[tokenId][i];
+            fromAddresses[i] = txn.from;
+            toAddresses[i] = txn.to;
+            prices[i] = txn.price;
+            timestamps[i] = txn.timestamp;
+            transactionTypes[i] = txn.transactionType;
+        }
+        
+        return (fromAddresses, toAddresses, prices, timestamps, transactionTypes);
+    }
+    
+    /// @notice Get all token IDs that exist in the contract
+    function getAllTokens() external view returns (uint256[] memory) {
+        uint256 totalSupply = _tokenIds.current();
+        uint256 existingCount = 0;
+        
+        // Count existing tokens
+        for (uint256 i = 1; i <= totalSupply; i++) {
+            if (_exists(i)) {
+                existingCount++;
+            }
+        }
+        
+        // Create array
+        uint256[] memory existingTokens = new uint256[](existingCount);
+        
+        // Populate array
+        uint256 currentIndex = 0;
+        for (uint256 i = 1; i <= totalSupply; i++) {
+            if (_exists(i)) {
+                existingTokens[currentIndex] = i;
+                currentIndex++;
+            }
+        }
+        
+        return existingTokens;
     }
 
     /// @notice Supports interface check for ERC721 and ERC2981

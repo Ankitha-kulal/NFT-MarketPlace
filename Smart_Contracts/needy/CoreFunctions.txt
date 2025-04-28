@@ -1,0 +1,74 @@
+Core NFT Functions
+
+Create (Mint) NFT - Users can mint new NFTs with optional royalty settings
+List NFT for Sale - Users can list their NFTs on the marketplace
+Buy NFT - Users can purchase listed NFTs
+Cancel Listing - Sellers can cancel their listings
+Transaction History - Each NFT tracks its complete ownership history
+
+View Functions
+
+Get Listed NFTs - View all NFTs currently for sale
+Get My NFTs - View all NFTs owned by the caller
+Get My Created NFTs - View all NFTs created by the caller
+Get NFT Details - View details of a specific NFT
+Get Transaction History - View the complete transaction history of an NFT
+
+Administrative Functions
+
+Update Listing Fee - Marketplace owner can update the listing fee
+Royalty Support - Creators can set royalties that are automatically paid on secondary sales
+
+UI Workflows
+1. Creating an NFT
+
+User connects wallet
+User uploads file/content and sets metadata
+User specifies royalty receiver and percentage (optional)
+User pays listing fee
+System mints the NFT and records creation transaction
+
+2. Viewing NFTs
+
+Marketplace view: All listed NFTs displayed with prices
+My Collection view: User's owned NFTs (both listed and unlisted)
+My Creations view: NFTs created by the user
+
+3. NFT Details View
+
+When a user clicks on an NFT, they see:
+
+NFT image/content
+Creator information
+Current owner
+Price (if listed)
+Complete transaction history (creators, previous owners, sale prices)
+Royalty information
+
+
+
+4. Listing an NFT
+
+User selects an NFT they own
+User sets price
+User pays listing fee
+NFT appears on marketplace
+
+5. Buying an NFT
+
+User views NFT details
+User clicks "Buy" and pays the listed price
+System automatically:
+
+Transfers NFT to buyer
+Pays royalties to creator (if applicable)
+Pays remaining amount to seller
+Records the transaction in history
+
+
+
+6. Managing Listings
+
+User can view their listed NFTs
+User can cancel listings
+Transaction history is updated accordingly
