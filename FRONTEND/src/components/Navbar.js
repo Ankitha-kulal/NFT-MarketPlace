@@ -1,42 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../supabaseClient';
 
 const Navbar = () => {
-  const { user, handleLogout } = useAuth();
+  const { user, signOut } = useAuth();
   const [profile, setProfile] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [nftDropdownOpen, setNftDropdownOpen] = useState(false);
   const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
 
   useEffect(() => {
-    // Fetch user profile when user changes
-    const fetchProfile = async () => {
-      if (!user) {
-        setProfile(null);
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        
-        if (!error && data) {
-          setProfile(data);
-        } else {
-          console.error('Error fetching profile:', error);
-        }
-      } catch (err) {
-        console.error('Unexpected error fetching profile:', err);
-      }
-    };
-
-    fetchProfile();
+    // Fetch profile when user changes
+    if (user) {
+      fetchProfile(user.id);
+    } else {
+      setProfile(null);
+    }
   }, [user]);
+
+  const fetchProfile = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (!error && data) {
+        setProfile(data);
+      } else {
+        console.error('Error fetching profile:', error);
+      }
+    } catch (err) {
+      console.error('Unexpected error fetching profile:', err);
+    }
+  };
 
   // Get avatar display - either image or initials
   const getAvatarDisplay = () => {
@@ -80,10 +79,10 @@ const Navbar = () => {
     if (!accountDropdownOpen) setNftDropdownOpen(false);
   };
 
-  const logoutClickHandler = (e) => {
+  const handleLogout = async (e) => {
     e.preventDefault();
     console.log('Logout clicked'); // Debug log
-    handleLogout();
+    await signOut();
   };
 
   return (
@@ -137,7 +136,7 @@ const Navbar = () => {
               {nftDropdownOpen && (
                 <div className="absolute right-0 mt-2 py-2 w-48 bg-white rounded shadow-xl z-20">
                   <Link to="/nft-hub" className="block px-4 py-2 text-gray-800 hover:bg-green-100">NFT Hub</Link>
-                  <Link to="/nft-create" className="block px-4 py-2 text-gray-800 hover:bg-green-100">NFT Create</Link>
+                  <Link to="/nft/create" className="block px-4 py-2 text-gray-800 hover:bg-green-100">NFT Create</Link>
                   <Link to="/nft-collection" className="block px-4 py-2 text-gray-800 hover:bg-green-100">NFT Collection</Link>
                   <Link to="/bid" className="block px-4 py-2 text-gray-800 hover:bg-green-100">Bid</Link>
                 </div>
@@ -161,12 +160,12 @@ const Navbar = () => {
                 
                 {accountDropdownOpen && (
                   <div className="absolute right-0 mt-2 py-2 w-48 bg-white rounded shadow-xl z-20">
-                    <Link to="/Profile" className="block px-4 py-2 text-gray-800 hover:bg-green-100">My Profile</Link>
+                    <Link to="/profile" className="block px-4 py-2 text-gray-800 hover:bg-green-100">My Profile</Link>
                     <Link to="/ProfileEdit" className="block px-4 py-2 text-gray-800 hover:bg-green-100">Edit Profile</Link>
                     <Link to="/change-password" className="block px-4 py-2 text-gray-800 hover:bg-green-100">Change Password</Link>
                     <div className="border-t border-gray-200 my-1"></div>
                     <button 
-                      onClick={logoutClickHandler} 
+                      onClick={handleLogout} 
                       className="block w-full text-left px-4 py-2 text-gray-800 hover:bg-green-100"
                     >
                       Logout
@@ -249,7 +248,7 @@ const Navbar = () => {
             
             <div className="px-3 py-2 text-green-300 font-medium">NFT</div>
             <Link to="/nft-hub" className="block px-6 py-2 hover:bg-green-700 rounded">NFT Hub</Link>
-            <Link to="/nft-create" className="block px-6 py-2 hover:bg-green-700 rounded">NFT Create</Link>
+            <Link to="/nft/create" className="block px-6 py-2 hover:bg-green-700 rounded">NFT Create</Link>
             <Link to="/nft-collection" className="block px-6 py-2 hover:bg-green-700 rounded">NFT Collection</Link>
             <Link to="/bid" className="block px-6 py-2 hover:bg-green-700 rounded">Bid</Link>
             
@@ -257,13 +256,13 @@ const Navbar = () => {
               <>
                 <div className="border-t border-green-700 my-2"></div>
                 <div className="px-3 py-2 text-green-300 font-medium">My Account</div>
-                <Link to="/Profile" className="block px-6 py-2 hover:bg-green-700 rounded">My Profile</Link>
+                <Link to="/profile" className="block px-6 py-2 hover:bg-green-700 rounded">My Profile</Link>
                 <Link to="/ProfileEdit" className="block px-6 py-2 hover:bg-green-700 rounded">Edit Profile</Link>
                 <Link to="/change-password" className="block px-6 py-2 hover:bg-green-700 rounded">Change Password</Link>
                 <Link to="/connect" className="block px-6 py-2 hover:bg-green-700 rounded">Connect Wallet</Link>
                 <div className="border-t border-green-700 my-2"></div>
                 <button 
-                  onClick={logoutClickHandler} 
+                  onClick={handleLogout} 
                   className="block w-full text-left px-6 py-2 text-red-400 hover:bg-green-700 rounded flex items-center"
                 >
                   <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -293,3 +292,4 @@ const Navbar = () => {
 };
 
 export default Navbar;
+

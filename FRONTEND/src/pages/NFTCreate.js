@@ -1,12 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { supabase } from '../supabaseClient';
+import { ethers } from 'ethers';
+import { useWeb3 } from '../context/Web3Context';
+import { PINATA_GATEWAY } from '../config';
 
 const NFTCreate = () => {
   const [title, setTitle] = useState('');
@@ -16,7 +14,25 @@ const NFTCreate = () => {
   const [file, setFile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [userId, setUserId] = useState(null);
+  const [txStatus, setTxStatus] = useState('');
+  const [royaltyPercentage, setRoyaltyPercentage] = useState('10'); // Default 10%
   const navigate = useNavigate();
+
+  // Get Web3 context
+  const { account, contract, isCorrectNetwork, connectWallet, switchNetwork } = useWeb3();
+
+  // Get the current user ID when component mounts
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data && data.user) {
+        setUserId(data.user.id);
+      }
+    };
+    getCurrentUser();
+  }, []);
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -59,22 +75,124 @@ const NFTCreate = () => {
     }
   };
 
+  const uploadMetadataToPinata = async (metadata) => {
+    try {
+      const response = await axios.post(
+        "https://api.pinata.cloud/pinning/pinJSONToIPFS",
+        metadata,
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.REACT_APP_PINATA_JWT}`,
+            'Content-Type': 'application/json',
+            'pinata_api_key': process.env.REACT_APP_PINATA_API_KEY,
+            'pinata_secret_api_key': process.env.REACT_APP_PINATA_SECRET_API_KEY,
+          }
+        }
+      );
+      
+      return response.data.IpfsHash;
+    } catch (error) {
+      console.error("Error uploading metadata to Pinata:", error);
+      throw new Error("Failed to upload metadata to IPFS");
+    }
+  };
+
+  // Modified saveToSupabase function to handle the missing column
   const saveToSupabase = async (nftData) => {
     try {
+      // Remove the blockchain_status field if it's causing issues
+      const { blockchain_status, ...filteredData } = nftData;
+      
+      // Add a status field instead (assuming this column exists)
+      const dataToInsert = {
+        ...filteredData,
+        status: blockchain_status // Use a column that actually exists in your table
+      };
+      
       const { data, error } = await supabase
         .from('nfts')
-        .insert([nftData]);
+        .insert([dataToInsert])
+        .select();
         
       if (error) throw error;
       return data;
     } catch (error) {
       console.error("Error saving to Supabase:", error);
-      throw new Error("Failed to save NFT data");
+      throw new Error(`Failed to save NFT data: ${error.message}`);
+    }
+  };
+
+  const mintNFTOnChain = async (tokenURI, priceInEth) => {
+    try {
+      setTxStatus('Getting listing fee...');
+      // Get the listing fee from the contract
+      const listingFee = await contract.getListingPrice();
+      
+      // Convert royalty percentage to basis points (e.g., 10% -> 1000 basis points)
+      const royaltyBasisPoints = parseInt(royaltyPercentage) * 100;
+      
+      setTxStatus('Minting NFT...');
+      // Call the mintNFT function with listing fee as value
+      const tx = await contract.mintNFT(
+        tokenURI,                // Metadata URI
+        account,                 // Royalty receiver (current user)
+        royaltyBasisPoints,      // Royalty fee in basis points
+        { value: listingFee }    // Pay the listing fee
+      );
+      
+      setTxStatus('Waiting for transaction confirmation...');
+      // Wait for transaction to be confirmed
+      const receipt = await tx.wait();
+      
+      // Find the NFTMinted event to get the tokenId
+      const event = receipt.logs
+        .filter(log => log.fragment && log.fragment.name === 'NFTMinted')
+        .map(log => log.args);
+      
+      if (event && event.length > 0) {
+        const tokenId = event[0].tokenId;
+        
+        // If price is set, list the NFT for sale
+        if (priceInEth && priceInEth > 0) {
+          setTxStatus('Listing NFT for sale...');
+          // Convert ETH price to wei
+          const priceInWei = ethers.parseEther(priceInEth.toString());
+          
+          // List the NFT for sale
+          const listTx = await contract.listNFT(tokenId, priceInWei);
+          await listTx.wait();
+        }
+        
+        setTxStatus('');
+        return tokenId.toString();
+      } else {
+        throw new Error("Failed to get token ID from transaction");
+      }
+    } catch (error) {
+      console.error("Error minting NFT on blockchain:", error);
+      setTxStatus('');
+      throw new Error(`Blockchain error: ${error.message}`);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Check if wallet is connected and on the correct network
+    if (!account) {
+      try {
+        await connectWallet();
+        return; // Return early to let the connect effect happen
+      } catch (error) {
+        setErrorMessage("Please connect your wallet to continue");
+        return;
+      }
+    }
+    
+    if (!isCorrectNetwork) {
+      setErrorMessage("Please switch to the correct network to continue");
+      return;
+    }
     
     if (!file) {
       setErrorMessage('Please select an image file');
@@ -84,10 +202,119 @@ const NFTCreate = () => {
     try {
       setIsLoading(true);
       setErrorMessage('');
+      setSuccessMessage('');
       
       // Upload image to IPFS via Pinata
+      setTxStatus('Uploading image to IPFS...');
       const ipfsHash = await uploadToPinata(file);
-      const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+      const imageUrl = `${PINATA_GATEWAY}${ipfsHash}`;
+      
+      // Create and upload metadata
+      setTxStatus('Creating NFT metadata...');
+      const metadata = {
+        name: title,
+        description: description,
+        image: imageUrl,
+        attributes: [
+          { trait_type: "Category", value: category }
+        ]
+      };
+      
+      const metadataHash = await uploadMetadataToPinata(metadata);
+      const metadataUrl = `${PINATA_GATEWAY}${metadataHash}`;
+      
+      // Mint NFT on the blockchain (but don't list for sale)
+      const tokenId = await mintNFTOnChain(metadataUrl, 0);
+      
+      // Save metadata to Supabase
+      const nftData = {
+        title,
+        category,
+        description,
+        price: 0, // Not for sale
+        image_url: imageUrl,
+        metadata_url: metadataUrl,
+        ipfs_hash: ipfsHash,
+        metadata_hash: metadataHash,
+        creator_id: userId,
+        owner_id: userId,
+        created_at: new Date(),
+        token_id: tokenId,
+        contract_address: contract.target,
+        blockchain_status: 'minted', // This field will be handled in saveToSupabase
+        for_sale: false,
+        royalty_percentage: parseInt(royaltyPercentage)
+      };
+      
+      await saveToSupabase(nftData);
+      
+      // Success!
+      setSuccessMessage("NFT created and minted successfully!");
+      setTimeout(() => navigate('/nft-hub'), 2000);
+    } catch (error) {
+      setErrorMessage(error.message || 'An error occurred while creating the NFT');
+    } finally {
+      setIsLoading(false);
+      setTxStatus('');
+    }
+  };
+
+  const handleSaveAndSell = async (e) => {
+    e.preventDefault();
+    
+    // Check if wallet is connected and on the correct network
+    if (!account) {
+      try {
+        await connectWallet();
+        return; // Return early to let the connect effect happen
+      } catch (error) {
+        setErrorMessage("Please connect your wallet to continue");
+        return;
+      }
+    }
+    
+    if (!isCorrectNetwork) {
+      setErrorMessage("Please switch to the correct network");
+      await switchNetwork();
+      return;
+    }
+    
+    if (!file) {
+      setErrorMessage('Please select an image file');
+      return;
+    }
+    
+    if (!price || parseFloat(price) <= 0) {
+      setErrorMessage('Please enter a valid price');
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      setErrorMessage('');
+      setSuccessMessage('');
+      
+      // Upload image to IPFS via Pinata
+      setTxStatus('Uploading image to IPFS...');
+      const ipfsHash = await uploadToPinata(file);
+      const imageUrl = `${PINATA_GATEWAY}${ipfsHash}`;
+      
+      // Create and upload metadata
+      setTxStatus('Creating NFT metadata...');
+      const metadata = {
+        name: title,
+        description: description,
+        image: imageUrl,
+        attributes: [
+          { trait_type: "Category", value: category }
+        ]
+      };
+      
+      const metadataHash = await uploadMetadataToPinata(metadata);
+      const metadataUrl = `${PINATA_GATEWAY}${metadataHash}`;
+      
+      // Mint NFT on the blockchain and list for sale
+      const tokenId = await mintNFTOnChain(metadataUrl, price);
       
       // Save metadata to Supabase
       const nftData = {
@@ -95,57 +322,79 @@ const NFTCreate = () => {
         category,
         description,
         price: parseFloat(price),
-        image_url: ipfsUrl,
+        image_url: imageUrl,
+        metadata_url: metadataUrl,
         ipfs_hash: ipfsHash,
+        metadata_hash: metadataHash,
+        creator_id: userId,
+        owner_id: userId,
         created_at: new Date(),
-        user_id: supabase.auth.user()?.id // Assuming you have authentication set up
+        token_id: tokenId,
+        contract_address: contract.target,
+        blockchain_status: 'listed', // This field will be handled in saveToSupabase
+        for_sale: true,
+        royalty_percentage: parseInt(royaltyPercentage)
       };
       
       await saveToSupabase(nftData);
       
-      // Success! Redirect to NFT hub
-      navigate('/nft-hub');
+      // Success!
+      setSuccessMessage("NFT created, minted and listed for sale successfully!");
+      setTimeout(() => navigate('/nft-hub'), 2000);
     } catch (error) {
       setErrorMessage(error.message || 'An error occurred while creating the NFT');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleSaveAndSell = async (e) => {
-    e.preventDefault();
-    // Similar to handleSubmit but with additional flag
-    try {
-      setIsLoading(true);
-      setErrorMessage('');
-      
-      const ipfsHash = await uploadToPinata(file);
-      const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
-      
-      const nftData = {
-        title,
-        category,
-        description,
-        price: parseFloat(price),
-        image_url: ipfsUrl,
-        ipfs_hash: ipfsHash,
-        created_at: new Date(),
-        user_id: supabase.auth.user()?.id,
-        for_sale: true // Additional field to mark it for sale
-      };
-      
-      await saveToSupabase(nftData);
-      navigate('/nft-hub');
-    } catch (error) {
-      setErrorMessage(error.message || 'An error occurred while creating the NFT');
-    } finally {
-      setIsLoading(false);
+      setTxStatus('');
     }
   };
 
   const handleCancel = () => {
     navigate('/nft-hub');
   };
+
+  // Display wallet connection button if not connected
+  if (!account) {
+    return (
+      <div className="container center-align" style={{ marginTop: '50px' }}>
+        <div className="card z-depth-3" style={{ padding: '20px', borderRadius: '20px', maxWidth: '500px', margin: '0 auto' }}>
+          <h4 className="black-text">Connect Wallet</h4>
+          <p>Please connect your wallet to create an NFT</p>
+          <button 
+            className="btn blue darken-2 waves-effect waves-light"
+            onClick={connectWallet}
+          >
+            <i className="material-icons left">account_balance_wallet</i>
+            Connect Wallet
+          </button>
+          {errorMessage && (
+            <div className="card-panel red lighten-4 red-text text-darken-4 mt-3">
+              <i className="material-icons left">error</i> {errorMessage}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Display network switch button if on wrong network
+  if (!isCorrectNetwork) {
+    return (
+      <div className="container center-align" style={{ marginTop: '50px' }}>
+        <div className="card z-depth-3" style={{ padding: '20px', borderRadius: '20px', maxWidth: '500px', margin: '0 auto' }}>
+          <h4 className="black-text">Wrong Network</h4>
+          <p>Please switch to the Sepolia test network to continue</p>
+          <button 
+            className="btn orange darken-2 waves-effect waves-light"
+            onClick={switchNetwork}
+          >
+            <i className="material-icons left">swap_horiz</i>
+            Switch Network
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="black-text container" style={{ display: 'flex', justifyContent: 'center', marginTop: '50px' }}>
@@ -157,6 +406,21 @@ const NFTCreate = () => {
         {errorMessage && (
           <div className="card-panel red lighten-4 red-text text-darken-4">
             <i className="material-icons left">error</i> {errorMessage}
+          </div>
+        )}
+        
+        {successMessage && (
+          <div className="card-panel green lighten-4 green-text text-darken-4">
+            <i className="material-icons left">check_circle</i> {successMessage}
+          </div>
+        )}
+        
+        {txStatus && (
+          <div className="card-panel blue lighten-4 blue-text text-darken-4">
+            <div className="progress">
+              <div className="indeterminate"></div>
+            </div>
+            <p><i className="material-icons left">sync</i> {txStatus}</p>
           </div>
         )}
         
@@ -216,6 +480,20 @@ const NFTCreate = () => {
             />
             <label className={price ? "active" : ""}>Price (ETH)</label>
           </div>
+          
+          <div className="input-field">
+            <i className="material-icons prefix">copyright</i>
+            <input 
+              type="number" 
+              step="1" 
+              min="0" 
+              max="30"
+              value={royaltyPercentage} 
+              onChange={(e) => setRoyaltyPercentage(e.target.value)} 
+              required 
+            />
+            <label className={royaltyPercentage ? "active" : ""}>Royalty Percentage (%)</label>
+          </div>
 
           <div className="row center">
             <button 
@@ -224,7 +502,7 @@ const NFTCreate = () => {
               style={{ marginRight: '10px' }}
               disabled={isLoading}
             >
-              <i className="material-icons left">save</i> Save
+              <i className="material-icons left">save</i> Mint NFT
               {isLoading && <span className="spinner"></span>}
             </button>
             <button 
@@ -232,16 +510,15 @@ const NFTCreate = () => {
               className="btn blue darken-2"
               onClick={handleSaveAndSell}
               disabled={isLoading}
+              style={{ marginRight: '10px' }}
             >
-              <i className="material-icons left">sell</i> Save & Sell
+              <i className="material-icons left">sell</i> Mint & List for Sale
               {isLoading && <span className="spinner"></span>}
             </button>
             <button 
               type="button" 
               onClick={handleCancel} 
-              className="btn red darken-2" 
-              style={{ marginLeft: '10px' }}
-              disabled={isLoading}
+              className="btn red darken-2"
             >
               <i className="material-icons left">cancel</i> Cancel
             </button>

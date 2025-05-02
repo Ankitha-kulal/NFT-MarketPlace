@@ -32,7 +32,6 @@ const Marketplace = () => {
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
   };
-
   return (
     <div className={`${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'} min-h-screen transition-colors duration-300`}>
       <div className="container mx-auto px-4 py-8">

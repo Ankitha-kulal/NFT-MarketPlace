@@ -34,11 +34,7 @@ const Home = () => {
             Learn More
           </button>
         </div>
-
-       
-        {/* slider */}
         
-
         {/* Footer */}
         <div className="footer">
           © 2025 NFT Platform • The Home for Digital Collectibles

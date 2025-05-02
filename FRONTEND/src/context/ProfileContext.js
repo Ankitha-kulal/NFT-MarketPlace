@@ -1,8 +1,12 @@
-// context/ProfileContext.js
-import { createContext, useContext, useState } from "react";
+import { createContext, useState, useContext } from "react";
 
-const ProfileContext = createContext();
+// Create the context and export it
+export const ProfileContext = createContext();
 
+// Create a hook for easy context usage
+export const useProfile = () => useContext(ProfileContext);
+
+// Create and export the provider component
 export const ProfileProvider = ({ children }) => {
   const [profileData, setProfileData] = useState(null);
 
@@ -17,4 +21,4 @@ export const ProfileProvider = ({ children }) => {
   );
 };
 
-export const useProfile = () => useContext(ProfileContext);
+export default ProfileProvider;

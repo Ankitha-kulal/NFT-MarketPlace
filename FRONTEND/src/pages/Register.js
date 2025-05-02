@@ -11,63 +11,108 @@ const Register = () => {
   const [walletAddress, setWalletAddress] = useState('');
   const [isWalletConnected, setIsWalletConnected] = useState(false);
   const [isMetaMaskInstalled, setIsMetaMaskInstalled] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     M.AutoInit();
     
-    // Check if MetaMask is installed
-    const checkMetaMaskInstalled = () => {
-      if (typeof window !== "undefined" && typeof window.ethereum !== "undefined") {
-        setIsMetaMaskInstalled(true);
-        
-        // Listen for account changes
-        window.ethereum.on('accountsChanged', (accounts) => {
-          if (accounts.length > 0) {
-            setWalletAddress(accounts[0]);
-            setIsWalletConnected(true);
-          } else {
-            setWalletAddress('');
-            setIsWalletConnected(false);
-          }
-        });
-        
-        // Check if already connected
-        window.ethereum.request({ method: 'eth_accounts' })
-          .then(accounts => {
-            if (accounts.length > 0) {
-              setWalletAddress(accounts[0]);
-              setIsWalletConnected(true);
-            }
-          })
-          .catch(err => console.error("Error checking existing connection:", err));
+    // Check if user is already logged in
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        navigate('/dashboard'); // Redirect to dashboard if already logged in
       }
     };
     
+    checkSession();
+    
+    // Improved check for MetaMask installation
+    const checkMetaMaskInstalled = () => {
+      if (typeof window !== "undefined") {
+        // Check for ethereum provider (more reliable than just window.ethereum)
+        // This handles both MetaMask and other web3 wallets
+        const provider = window.ethereum || 
+                         window.web3?.currentProvider ||
+                         (window.web3?.givenProvider || window.ethereum);
+        
+        if (provider) {
+          console.log("Web3 provider detected:", provider);
+          setIsMetaMaskInstalled(true);
+          
+          // Listen for account changes
+          provider.on('accountsChanged', (accounts) => {
+            if (accounts.length > 0) {
+              setWalletAddress(accounts[0]);
+              setIsWalletConnected(true);
+            } else {
+              setWalletAddress('');
+              setIsWalletConnected(false);
+            }
+          });
+          // Check if already connected
+          provider.request({ method: 'eth_accounts' })
+            .then(accounts => {
+              console.log("Retrieved accounts:", accounts);
+              if (accounts.length > 0) {
+                setWalletAddress(accounts[0]);
+                setIsWalletConnected(true);
+              }
+            })
+            .catch(err => {
+              console.error("Error checking existing connection:", err);
+              // Even if there's an error checking accounts, we know provider exists
+              setIsMetaMaskInstalled(true);
+            });
+        } else {
+          console.log("No Web3 provider detected");
+          setIsMetaMaskInstalled(false);
+        }
+      }
+    };
+    
+    // Run the check once when component mounts
     checkMetaMaskInstalled();
     
-    // Cleanup listener on unmount
+    // Listen for auth state changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log("Auth event:", event);
+        if (event === 'SIGNED_IN') {
+          console.log("User signed in!");
+          navigate('/dashboard');
+        }
+      }
+    );
+    
+    // Cleanup listeners on unmount
     return () => {
       if (window.ethereum) {
         window.ethereum.removeAllListeners('accountsChanged');
       }
+      authListener?.subscription?.unsubscribe();
     };
-  }, []);
+  }, [navigate]);
 
   const connectWallet = async () => {
     if (!isMetaMaskInstalled) {
-      // Open MetaMask download page in a new tab
-      window.open('https://metamask.io/download.html', '_blank');
+      // Inform the user to install MetaMask
       M.toast({ html: 'MetaMask is not installed. Redirecting to download page.', classes: 'red' });
+      window.open('https://metamask.io/download.html', '_blank');
       return;
     }
-    
     try {
-      // Using window.ethereum directly instead of creating a provider first
-      const accounts = await window.ethereum.request({ 
+      // Get the provider - handles any Ethereum wallet, not just MetaMask
+      const provider = window.ethereum || window.web3?.currentProvider;
+      if (!provider) {
+        // Fallback message if provider isn't accessible
+        M.toast({ html: 'Unable to detect Web3 wallet. Please make sure MetaMask is installed and unlocked.', classes: 'red' });
+        return;
+      }
+      // Request account access
+      const accounts = await provider.request({ 
         method: 'eth_requestAccounts' 
       });
-      
       if (accounts.length > 0) {
         setWalletAddress(accounts[0]);
         setIsWalletConnected(true);
@@ -75,7 +120,12 @@ const Register = () => {
       }
     } catch (error) {
       console.error("Connection error:", error);
-      M.toast({ html: 'Failed to connect wallet: ' + error.message, classes: 'red' });
+      // More helpful error message
+      let errorMessage = error.message || "Unknown error";
+      if (errorMessage.includes("User rejected")) {
+        errorMessage = "Connection rejected. Please approve the connection in your wallet.";
+      }
+      M.toast({ html: 'Failed to connect wallet: ' + errorMessage, classes: 'red' });
     }
   };
   
@@ -93,47 +143,86 @@ const Register = () => {
     }
     
     try {
-      // Check if wallet is already registered
-      // Note: This should ideally be a server-side check since admin functions
-      // are typically not available in client-side code
-      // Alternative approach would be to use a custom API endpoint or RLS
+      setLoading(true);
+      
+      // Check if username is already taken
+      const { data: existingUsers, error: usernameCheckError } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', username);
+
+      if (usernameCheckError) {
+        console.error("Username check error:", usernameCheckError);
+        M.toast({ html: 'Error checking username availability', classes: 'red' });
+        setLoading(false);
+        return;
+      }
+
+      if (existingUsers && existingUsers.length > 0) {
+        M.toast({ html: 'Username already taken. Please choose another one.', classes: 'red' });
+        setLoading(false);
+        return;
+      }
       
       // Generate a nonce for the user to sign to prove ownership
       const nonce = Math.floor(Math.random() * 1000000).toString();
       const message = `Sign this message to register your wallet with our NFT marketplace. Nonce: ${nonce}`;
       
+      // Get the provider - more reliable than directly using window.ethereum
+      const provider = window.ethereum || window.web3?.currentProvider;
+      
       // Ask user to sign the message
-      await window.ethereum.request({
+      await provider.request({
         method: 'personal_sign',
         params: [message, walletAddress]
       });
       
+      // Create wallet email that won't conflict with existing users
+      const walletEmail = `wallet_${walletAddress.toLowerCase().substring(2)}@nft.marketplace`;
+      const randomPassword = Math.random().toString(36).slice(2, 15) + Math.random().toString(36).slice(2, 15);
+      
       // Create a new user with the wallet address
-      const { error } = await supabase.auth.signUp({
-        email: `${walletAddress.toLowerCase()}@wallet.auth`, // Use a placeholder email
-        password: Math.random().toString(36).slice(2, 10), // Random password
+      const { data, error } = await supabase.auth.signUp({
+        email: walletEmail,
+        password: randomPassword,
         options: {
           data: {
             username: username,
             wallet_address: walletAddress,
-            auth_type: 'wallet',
-            is_complete: false
+            auth_type: 'wallet'
           },
         },
       });
       
       if (error) {
-        M.toast({ html: error.message, classes: 'red' });
+        console.error("Wallet signup error:", error);
+        M.toast({ html: 'Registration error: ' + error.message, classes: 'red' });
+        setLoading(false);
         return;
       }
       
-      // Success - no need to insert into a separate users table
+      // Sign in the user immediately after registration
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: walletEmail,
+        password: randomPassword
+      });
+      
+      if (signInError) {
+        console.error("Error signing in after wallet registration:", signInError);
+        M.toast({ html: 'Registration successful, but could not log in automatically. Please log in manually.', classes: 'orange' });
+        setTimeout(() => navigate('/login'), 2000);
+        return;
+      }
+      
+      // Success
       M.toast({ html: 'Registration successful!', classes: 'green' });
-      setTimeout(() => navigate('/complete-profile'), 1000);
+      setTimeout(() => navigate('/dashboard'), 1000);
       
     } catch (error) {
-      console.error(error);
-      M.toast({ html: 'Registration failed: ' + error.message, classes: 'red' });
+      console.error("Registration error:", error);
+      M.toast({ html: 'Registration failed: ' + (error.message || "Unknown error"), classes: 'red' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -144,50 +233,90 @@ const Register = () => {
       M.toast({ html: 'Passwords do not match!', classes: 'red' });
       return;
     }
-
+  
     if (password.length < 6) {
       M.toast({ html: 'Password must be at least 6 characters', classes: 'red' });
       return;
     }
-
+  
     if (!username) {
       M.toast({ html: 'Please enter a username', classes: 'red' });
       return;
     }
-
+  
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          // Redirect to profile completion page after email verification
-          emailRedirectTo: `${window.location.origin}/complete-profile`,
-          data: {
-            username: username,
-            email: email,
-            auth_type: 'email',
-            is_complete: false
-          },
-        },
-      });
+      setLoading(true);
+      
+      // Check if username is already taken
+      const { data: existingUsers, error: usernameCheckError } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('username', username);
 
-      if (error) {
-        M.toast({ html:"Error in registration: "+ error.message, classes: 'red' });
+      if (usernameCheckError) {
+        console.error("Username check error:", usernameCheckError);
+        M.toast({ html: 'Error checking username availability', classes: 'red' });
+        setLoading(false);
+        return;
+      }
+
+      if (existingUsers && existingUsers.length > 0) {
+        M.toast({ html: 'Username already taken. Please choose another one.', classes: 'red' });
+        setLoading(false);
         return;
       }
       
-      // Show success message
-      M.toast({ 
-        html: 'Registration successful! Please check your email to verify your account.', 
-        classes: 'green',
-        displayLength: 6000
+      // First step: Create the user in Auth
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username: username,
+            auth_type: 'email',
+          },
+          emailRedirectTo: window.location.origin + '/auth/callback'
+        }
       });
-
+  
+      if (error) {
+        console.error("Email signup error:", error);
+        M.toast({ html: "Registration error: " + error.message, classes: 'red' });
+        setLoading(false);
+        return;
+      }
+      
+      // Success!
+      console.log("User registered successfully:", data);
+      
+      // Check if email confirmation is required
+      if (data?.user?.identities?.[0]?.identity_data?.email_verified) {
+        // If email is already verified (rare, but possible with some Supabase settings)
+        M.toast({ html: 'Registration successful! Logging you in...', classes: 'green' });
+        setTimeout(() => navigate('/dashboard'), 2000);
+      } else {
+        // If email verification is required
+        M.toast({ 
+          html: `
+            <div>
+              <p><b>Registration successful!</b></p>
+              <p>Please check your email to confirm your account.</p>
+              <p>After confirmation, come back and <a href="/login" style="color: white; text-decoration: underline;">login here</a>.</p>
+            </div>`, 
+          classes: 'green', 
+          displayLength: 8000 
+        });
+        setTimeout(() => navigate('/login'), 4000);
+      }
+  
     } catch (error) {
-      console.error(error);
-      M.toast({ html: 'Registration failed: ' + error.message, classes: 'red' });
+      console.error("Registration error:", error);
+      M.toast({ html: 'Registration failed: ' + (error.message || "Unknown error"), classes: 'red' });
+    } finally {
+      setLoading(false);
     }
   };
+  
 
   return (
     <div className="container" style={{ display: 'flex', justifyContent: 'center', marginTop: '30px', marginBottom: '30px' }}>
@@ -214,6 +343,7 @@ const Register = () => {
                   onClick={connectWallet}
                   className="btn waves-effect waves-light orange darken-2 btn-large"
                   style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                  disabled={loading}
                 >
                   <img 
                     src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" 
@@ -236,14 +366,19 @@ const Register = () => {
                       required
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
+                      disabled={loading}
                     />
-                    <label htmlFor="wallet-username">Choose a Username</label>
+                    <label htmlFor="wallet-username" className={username ? "active" : ""}>Choose a Username</label>
                   </div>
                   
                   <div className="center-align" style={{ marginTop: '15px', marginBottom: '15px' }}>
-                    <button type="submit" className="btn waves-effect waves-light orange darken-3">
-                      Complete Registration with MetaMask
-                      <i className="material-icons right">how_to_reg</i>
+                    <button 
+                      type="submit" 
+                      className="btn waves-effect waves-light orange darken-3"
+                      disabled={loading}
+                    >
+                      {loading ? 'Processing...' : 'Complete Registration with MetaMask'}
+                      {!loading && <i className="material-icons right">how_to_reg</i>}
                     </button>
                   </div>
                 </form>
@@ -273,8 +408,9 @@ const Register = () => {
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
+                    disabled={loading}
                   />
-                  <label htmlFor="username">Username</label>
+                  <label htmlFor="username" className={username ? "active" : ""}>Username</label>
                 </div>
 
                 <div className="input-field">
@@ -285,8 +421,9 @@ const Register = () => {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    disabled={loading}
                   />
-                  <label htmlFor="email">Email</label>
+                  <label htmlFor="email" className={email ? "active" : ""}>Email</label>
                 </div>
 
                 <div className="input-field">
@@ -297,6 +434,7 @@ const Register = () => {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    disabled={loading}
                   />
                   <label htmlFor="password">Password (min 6 characters)</label>
                 </div>
@@ -309,21 +447,26 @@ const Register = () => {
                     required
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
+                    disabled={loading}
                   />
                   <label htmlFor="confirm-password">Confirm Password</label>
                 </div>
 
                 <div className="center-align" style={{ marginTop: '25px', marginBottom: '15px' }}>
-                  <button type="submit" className="btn waves-effect waves-light blue darken-3 btn-large" style={{ width: '100%' }}>
-                    Register with Email
-                    <i className="material-icons right">send</i>
+                  <button 
+                    type="submit" 
+                    className="btn waves-effect waves-light blue darken-3 btn-large" 
+                    style={{ width: '100%' }}
+                    disabled={loading}
+                  >
+                    {loading ? 'Processing...' : 'Register with Email'}
+                    {!loading && <i className="material-icons right">send</i>}
                   </button>
                 </div>
               </form>
             </div>
           </div>
         </div>
-
         <div className="center-align" style={{ marginTop: '20px' }}>
           <p>
             Already have an account?{' '}
@@ -339,5 +482,4 @@ const Register = () => {
     </div>
   );
 };
-
 export default Register;
