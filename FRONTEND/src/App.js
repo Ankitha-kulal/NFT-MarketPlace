@@ -6,7 +6,7 @@ import 'materialize-css/dist/css/materialize.min.css';
 import './App.css';
 
 // Context Providers - Import the components directly
-import { ProfileProvider } from './context/ProfileContext';
+import { ProfileContext, ProfileProvider } from './context/ProfileContext';
 import { Web3Provider } from './context/Web3Context';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -24,6 +24,13 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import NotFound from './pages/NotFound';
 import AuthCallback from './components/AuthCallback';
+import Marketplace from './pages/Marketplace';
+import Explore from './pages/Explore';
+import MyCard from './pages/MyCard';
+import ResetPassword from './pages/ResetPassword';
+import CompleteProfile from './pages/CompleteProfile';
+import ProfileEdit from './pages/ProfileEdit';
+// import NFTCollection from './pages/NFTCollection';
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -90,11 +97,37 @@ const AppRoutes = () => {
                 <NFTHub />
               </ProtectedRoute>
             } />
+            <Route path="/complete-profile" element={
+              <ProtectedRoute>
+                <CompleteProfile />
+              </ProtectedRoute>
+            } />
             <Route path="/nft/create" element={
               <ProtectedRoute>
                 <NFTCreate />
               </ProtectedRoute>
             } />
+             {/* <Route path="/nft-collection" element={
+              <ProtectedRoute>
+                <NFTCollection />
+              </ProtectedRoute>
+            } /> */}
+            <Route path="/Marketplace" element={
+              <ProtectedRoute>
+                <Marketplace />
+              </ProtectedRoute>
+            } />
+              <Route path="/explore" element={
+              <ProtectedRoute>
+                <Explore />
+              </ProtectedRoute>
+            } />
+              <Route path="/my-card" element={
+              <ProtectedRoute>
+                <MyCard />
+              </ProtectedRoute>
+            } />
+            
             <Route path="/nft/:id" element={
               <ProtectedRoute>
                 <NFTDetail />
@@ -103,6 +136,16 @@ const AppRoutes = () => {
             <Route path="/profile" element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            } />
+             <Route path="/ProfileEdit" element={
+              <ProtectedRoute>
+                <ProfileEdit />
+              </ProtectedRoute>
+            } />
+             <Route path="/reset-password" element={
+              <ProtectedRoute>
+                <ResetPassword />
               </ProtectedRoute>
             } />
             

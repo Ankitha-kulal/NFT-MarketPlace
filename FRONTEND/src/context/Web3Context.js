@@ -217,7 +217,6 @@ export const Web3Provider = ({ children }) => {
     setBalance(null);
     setContract(null);
   };
-
   // Refresh balance
   const refreshBalance = async () => {
     if (provider && account) {

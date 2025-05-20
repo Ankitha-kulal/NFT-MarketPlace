@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 
 const Profile = () => {
+  // State for user data
   const [userEmail, setUserEmail] = useState('');
   const [userName, setUserName] = useState('');
   const [fullName, setFullName] = useState('');
   const [bio, setBio] = useState('');
-  const [walletAddress, setWalletAddress] = useState('0x123456789abcdef');
+  const [walletAddress, setWalletAddress] = useState('');
   const [socialLinks, setSocialLinks] = useState({
     twitter: '',
     instagram: '',
@@ -15,52 +16,64 @@ const Profile = () => {
     website: ''
   });
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // UI state
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [profileImage, setProfileImage] = useState('/images/logo.png');
+  const [coverImage, setCoverImage] = useState('/images/nft-banner.jpg');
 
   useEffect(() => {
-    const fetchUserProfile = async () => {
+    fetchUserProfile();
+  }, []);
+
+  // Function to fetch user profile data from Supabase
+  const fetchUserProfile = async () => {
+    try {
       setLoading(true);
+      setError(null);
       
-      // Get current user
+      // Get current authenticated user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-
+      
       if (userError) {
-        console.error("Error fetching user:", userError);
-        setLoading(false);
-        return;
+        throw new Error(`Authentication error: ${userError.message}`);
       }
-
+      
       if (!user) {
-        console.log("User not logged in.");
-        setLoading(false);
-        return;
+        throw new Error('No authenticated user found');
       }
-
-      // Set basic user info
-      setUserEmail(user.email);
-      setUserName(user.user_metadata.username || 'User');
-
-      // Fetch profile data from profiles table
+      
+      // Set email from auth (basic info)
+      setUserEmail(user.email || '');
+      
+      // Fetch extended profile data from profiles table
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
-
+      
       if (profileError && profileError.code !== 'PGRST116') {
-        console.error("Error fetching profile:", profileError);
+        console.warn("Profile data fetch warning:", profileError.message);
       }
-
+      
       // Update state with profile data if it exists
       if (profileData) {
+        // Get username from profiles table instead of auth metadata
+        setUserName(profileData.username || 'User');
         setFullName(profileData.full_name || '');
-        setBio(profileData.bio || 'Passionate UI/UX Designer with a love for creating user-centered designs.');
+        setBio(profileData.bio || 'Passionate NFT collector and digital art enthusiast.');
+        setWalletAddress(profileData.wallet_address || '0x123456789abcdef');
         
-        // Update wallet address if available
-        if (profileData.wallet_address) {
-          setWalletAddress(profileData.wallet_address);
+        // Set profile images if available
+        if (profileData.avatar_url) {
+          setProfileImage(profileData.avatar_url);
         }
-        
+        if (profileData.cover_image) {
+          const { data } = supabase.storage.from('cover').getPublicUrl(profileData.cover_image);
+          setCoverImage(data.publicUrl);
+        }
         // Update social links
         setSocialLinks({
           twitter: profileData.twitter_link || '',
@@ -69,25 +82,30 @@ const Profile = () => {
           discord: profileData.discord_link || '',
           website: profileData.website_link || ''
         });
+      } else {
+        // Fallback to auth metadata if profile doesn't exist yet
+        setUserName(user.user_metadata?.username || 'User');
       }
-
+    } catch (err) {
+      console.error("Profile fetch error:", err);
+      setError(err.message);
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
-    fetchUserProfile();
-  }, []);
-
+  // Handle search input change
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
   };
 
-  // Function to truncate wallet address
+  // Format wallet address for display
   const formatWalletAddress = (address) => {
     if (!address) return '';
     return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
   };
 
-  // Social media icons
+  // Render social media links
   const renderSocialLinks = () => {
     const socialIcons = [];
     
@@ -176,13 +194,25 @@ const Profile = () => {
     ) : null;
   };
 
+  // Render profile UI
   return (
     <div className="mx-auto px-4 py-10 max-w-4xl">
+      {error && (
+        <div className="mb-4 bg-red-50 text-red-700 p-4 rounded-lg">
+          <p className="font-medium">Error loading profile</p>
+          <p>{error}</p>
+        </div>
+      )}
+      
       <div className="bg-white rounded-2xl shadow-xl overflow-hidden transform transition-all duration-300 hover:shadow-2xl">
         {/* Cover Photo */}
         <div 
           className="h-48 w-full bg-gradient-to-r from-green-400 to-emerald-600 relative"
-          style={{ backgroundImage: 'url(/images/nft-banner.jpg)', backgroundSize: 'cover', backgroundPosition: 'center' }}
+          style={{ 
+            backgroundImage: `url(${coverImage})`, 
+            backgroundSize: 'cover', 
+            backgroundPosition: 'center' 
+          }}
         >
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-green-900/40"></div>
         </div>
@@ -194,7 +224,7 @@ const Profile = () => {
             <div className="absolute -top-16">
               <div className="relative">
                 <img 
-                  src="/images/logo.png" 
+                  src={profileImage} 
                   alt="Profile" 
                   className="w-32 h-32 rounded-full border-4 border-white object-cover bg-white shadow-lg"
                 />
@@ -208,8 +238,12 @@ const Profile = () => {
           {/* User Info */}
           <div className="mt-16 text-center">
             {loading ? (
-              <div className="w-full flex justify-center py-4">
+              <div className="flex flex-col items-center py-4 space-y-3">
                 <div className="animate-pulse w-40 h-6 bg-gray-200 rounded"></div>
+                <div className="animate-pulse w-32 h-4 bg-gray-200 rounded"></div>
+                <div className="animate-pulse w-48 h-4 bg-gray-200 rounded"></div>
+                <div className="animate-pulse w-36 h-6 bg-gray-200 rounded-full mt-2"></div>
+                <div className="animate-pulse w-64 h-16 bg-gray-200 rounded mt-2"></div>
               </div>
             ) : (
               <>
@@ -258,7 +292,7 @@ const Profile = () => {
             </div>
           </div>
 
-          {/* Tabs or additional sections could go here */}
+          {/* Tabs Navigation */}
           <div className="mt-8">
             <div className="flex justify-center border-b border-gray-200">
               <button className="px-4 py-2 border-b-2 border-green-500 text-green-600 font-medium">Collection</button>
@@ -266,8 +300,18 @@ const Profile = () => {
               <button className="px-4 py-2 text-gray-500 hover:text-gray-700">Created</button>
               <button className="px-4 py-2 text-gray-500 hover:text-gray-700">Favorites</button>
             </div>
+            
+            {/* Collection Items */}
             <div className="py-6 text-center text-gray-500">
-              No items to display
+              {loading ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {[1, 2, 3].map((item) => (
+                    <div key={item} className="animate-pulse bg-gray-200 rounded-lg h-48"></div>
+                  ))}
+                </div>
+              ) : (
+                <div>No items to display</div>
+              )}
             </div>
           </div>
         </div>

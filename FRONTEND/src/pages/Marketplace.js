@@ -1,19 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, Wallet } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+import { toast } from 'react-toastify';
+import { Link } from 'react-router-dom';
+import { useWeb3 } from '../context/Web3Context';
+import { ethers } from 'ethers';
+
+// Initialize Supabase client
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const Marketplace = () => {
-  const allCards = [
-    { id: 1, name: 'Rare NFT', image: '/images/nft1.jpg', price: '2 ETH', category: 'art' },
-    { id: 2, name: 'Legendary NFT', image: '/images/nft2.jpg', price: '5 ETH', category: 'music' },
-    { id: 3, name: 'Epic NFT', image: '/images/nft3.jpg', price: '3 ETH', category: 'sports' },
-    { id: 4, name: 'Mythic NFT', image: '/images/nft4.jpg', price: '4 ETH', category: 'art' },
-    { id: 5, name: 'Classic NFT', image: '/images/nft5.jpg', price: '1 ETH', category: 'music' },
-    { id: 6, name: 'Exclusive NFT', image: '/images/nft6.jpg', price: '6 ETH', category: 'sports' }
-  ];
-
+  const [nfts, setNfts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [category, setCategory] = useState('');
   const [darkMode, setDarkMode] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [onChainData, setOnChainData] = useState({});
+  
+  // Get web3 context
+  const { 
+    account, 
+    contract, 
+    isCorrectNetwork,
+    connectWallet 
+  } = useWeb3();
 
   // Apply dark mode class to body
   useEffect(() => {
@@ -24,14 +37,154 @@ const Marketplace = () => {
     }
   }, [darkMode]);
 
-  const filteredCards = allCards.filter(card => 
-    (category === '' || card.category === category) &&
-    card.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Fetch NFTs and categories on component mount or when filters change
+  useEffect(() => {
+    fetchNFTs();
+    fetchCategories();
+  }, [searchTerm, category]);
+  
+  // Fetch on-chain data when contract is available
+  useEffect(() => {
+    const fetchOnChainNFTData = async () => {
+      if (!contract || nfts.length === 0) return;
+      
+      try {
+        const nftDataMap = {};
+        
+        // Process NFTs in batches to avoid rate limiting
+        const batchSize = 5;
+        for (let i = 0; i < nfts.length; i += batchSize) {
+          const batch = nfts.slice(i, i + batchSize);
+          
+          const promises = batch.map(async (nft) => {
+            if (!nft.token_id) return null;
+            
+            try {
+              // Get token listing if available
+              const listing = await contract.getTokenListing(nft.token_id);
+              
+              // Get creator
+              const creator = await contract.getCreator(nft.token_id);
+              
+              // Get creator info from database
+              let creatorName = "Unknown Creator";
+              try {
+                const { data } = await supabase
+                  .from('profiles')
+                  .select('username')
+                  .eq('wallet_address', creator.toLowerCase())
+                  .single();
+                  
+                if (data) {
+                  creatorName = data.username;
+                }
+              } catch (error) {
+                console.error("Error fetching creator name:", error);
+              }
+              
+              return {
+                id: nft.id,
+                price: listing.isListed ? listing.price.toString() : "0",
+                isListed: listing.isListed,
+                creator,
+                creatorName
+              };
+            } catch (error) {
+              console.error(`Error fetching data for token ${nft.token_id}:`, error);
+              return null;
+            }
+          });
+          
+          const results = await Promise.all(promises);
+          
+          // Add valid results to the map
+          results.forEach(result => {
+            if (result) {
+              nftDataMap[result.id] = result;
+            }
+          });
+          
+          // Small delay to avoid overwhelming the RPC
+          if (i + batchSize < nfts.length) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+        
+        setOnChainData(nftDataMap);
+      } catch (error) {
+        console.error("Error fetching on-chain data:", error);
+      }
+    };
+    
+    if (contract && nfts.length > 0) {
+      fetchOnChainNFTData();
+    }
+  }, [contract, nfts]);
+
+  // Fetch all categories for filtering
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('nfts')
+        .select('category')
+        .not('category', 'is', null);
+      
+      if (error) throw error;
+      
+      // Get unique categories
+      const uniqueCategories = [...new Set(data.map(item => item.category))];
+      setCategories(uniqueCategories);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      toast.error("Failed to load categories");
+    }
+  };
+
+  // Fetch NFTs from database with filtering
+  const fetchNFTs = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Start building query
+      let query = supabase
+        .from('nfts')
+        .select(`
+          *,
+          profiles:creator_id (username, avatar_url)
+        `);
+      
+      // Apply category filter
+      if (category) {
+        query = query.eq('category', category);
+      }
+      
+      // Apply search term
+      if (searchTerm) {
+        query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+      }
+      
+      // Apply sorting - newest first
+      query = query.order('created_at', { ascending: false });
+      
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      
+      setNfts(data || []);
+    } catch (error) {
+      console.error("Error fetching NFTs:", error);
+      toast.error("Failed to load NFTs");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
   };
+
+  const filteredNfts = nfts;
+
   return (
     <div className={`${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'} min-h-screen transition-colors duration-300`}>
       <div className="container mx-auto px-4 py-8">
@@ -40,13 +193,33 @@ const Marketplace = () => {
             <h2 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'} mb-2`}>Marketplace</h2>
             <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Browse and trade NFTs.</p>
           </div>
-          <button 
-            onClick={toggleDarkMode} 
-            className={`p-2 rounded-full ${darkMode ? 'bg-gray-700 text-yellow-300' : 'bg-gray-200 text-gray-700'}`}
-            aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {darkMode ? <Sun size={24} /> : <Moon size={24} />}
-          </button>
+          <div className="flex items-center space-x-3">
+            {!account && (
+              <button
+                onClick={connectWallet}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${
+                  darkMode ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'
+                } text-white transition-colors`}
+              >
+                <Wallet size={18} />
+                <span>Connect</span>
+              </button>
+            )}
+            {account && (
+              <div className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-800' : 'bg-gray-200'}`}>
+                <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {account.substring(0, 6)}...{account.substring(38)}
+                </span>
+              </div>
+            )}
+            <button 
+              onClick={toggleDarkMode} 
+              className={`p-2 rounded-full ${darkMode ? 'bg-gray-700 text-yellow-300' : 'bg-gray-200 text-gray-700'}`}
+              aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {darkMode ? <Sun size={24} /> : <Moon size={24} />}
+            </button>
+          </div>
         </div>
         
         <div className="flex flex-col md:flex-row gap-4 mb-8">
@@ -56,11 +229,12 @@ const Marketplace = () => {
                 darkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-800'
               }`}
               onChange={(e) => setCategory(e.target.value)}
+              value={category}
             >
               <option value="">All Categories</option>
-              <option value="art">Art</option>
-              <option value="music">Music</option>
-              <option value="sports">Sports</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
+              ))}
             </select>
           </div>
           <div className="w-full md:w-3/4">
@@ -71,6 +245,7 @@ const Marketplace = () => {
                 className={`w-full p-3 pl-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                   darkMode ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-800 placeholder-gray-500'
                 }`}
+                value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)} 
               />
               <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
@@ -82,54 +257,68 @@ const Marketplace = () => {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCards.map((card) => (
-            <div 
-              key={card.id} 
-              className={`rounded-xl shadow-md overflow-hidden transition-transform duration-300 hover:shadow-lg hover:transform hover:scale-105 ${
-                darkMode ? 'bg-gray-800' : 'bg-white'
-              }`}
-            >
-              <div className="relative">
-                <img 
-                  src={card.image} 
-                  alt={card.name} 
-                  className="w-full h-64 object-cover"
-                />
-                <div className="absolute top-3 right-3 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full uppercase">
-                  {card.category}
+        {isLoading ? (
+          <div className="flex justify-center my-12">
+            <div className={`animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 ${darkMode ? 'border-green-500' : 'border-green-600'}`}></div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredNfts.map((nft) => (
+              <Link 
+                to={`/nft/${nft.id}`}
+                key={nft.id}
+                className={`rounded-xl shadow-md overflow-hidden transition-transform duration-300 hover:shadow-lg hover:transform hover:scale-105 ${
+                  darkMode ? 'bg-gray-800' : 'bg-white'
+                }`}
+              >
+                <div className="relative">
+                  <img 
+                    src={nft.image_url || '/api/placeholder/400/320'} 
+                    alt={nft.title} 
+                    className="w-full h-64 object-cover"
+                  />
+                  <div className="absolute top-3 right-3 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full uppercase">
+                    {nft.category}
+                  </div>
                 </div>
-              </div>
-              <div className="p-5">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>{card.name}</h3>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    darkMode ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-800'
+                <div className="p-5">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>{nft.title}</h3>
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      darkMode ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-800'
+                    }`}>
+                      {onChainData[nft.id]?.isListed
+                        ? `${ethers.formatEther(onChainData[nft.id].price)} ETH`
+                        : `${nft.price} ETH`}
+                    </span>
+                  </div>
+                  <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                    {nft.description || 'No description available'}
+                  </p>
+                  <div className={`flex justify-between items-center pt-3 border-t ${
+                    darkMode ? 'border-gray-700' : 'border-gray-100'
                   }`}>
-                    {card.price}
-                  </span>
+                    <div className="flex items-center">
+                      <img 
+                        src={nft.profiles?.avatar_url || '/api/placeholder/32/32'} 
+                        alt={nft.profiles?.username || 'Creator'} 
+                        className="w-6 h-6 rounded-full mr-2 bg-gray-200"
+                      />
+                      <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {onChainData[nft.id]?.creatorName || nft.profiles?.username || 'Unknown Creator'}
+                      </span>
+                    </div>
+                    <div className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-300">
+                      {nft.for_sale ? 'Buy Now' : 'View'}
+                    </div>
+                  </div>
                 </div>
-                <div className={`flex justify-between items-center pt-3 border-t ${
-                  darkMode ? 'border-gray-700' : 'border-gray-100'
-                }`}>
-                  <button className={`flex items-center space-x-1 ${
-                    darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
-                  }`}>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                    </svg>
-                    <span>Add to favorites</span>
-                  </button>
-                  <button className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-300">
-                    Follow
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+              </Link>
+            ))}
+          </div>
+        )}
         
-        {filteredCards.length === 0 && (
+        {!isLoading && filteredNfts.length === 0 && (
           <div className={`text-center py-12 ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>
             <svg className={`mx-auto h-12 w-12 ${darkMode ? 'text-gray-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

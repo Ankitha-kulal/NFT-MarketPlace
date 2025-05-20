@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { Navigate } from 'react-router-dom';
 
 const NotFound = () => {
   return (
@@ -22,7 +23,7 @@ const NotFound = () => {
           <div className="flex justify-center">
             <button 
               className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md transition-colors duration-300 flex items-center"
-              onClick={() => console.log('Navigate to login')}
+              onClick={() => Navigate('/login')}
             >
               Go to Login
             </button>
@@ -30,7 +31,7 @@ const NotFound = () => {
         </div>
         
         <div className="bg-gray-800 p-4 text-center">
-          <p className="text-gray-400 text-sm">© 2025 Your Company Name</p>
+          <p className="text-gray-400 text-sm">© 2025 NFT Marketplace</p>
         </div>
       </div>
     </div>
