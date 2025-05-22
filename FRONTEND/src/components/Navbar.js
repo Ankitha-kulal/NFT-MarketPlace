@@ -109,7 +109,7 @@ const Navbar = () => {
             {user && (
               <>
                 <Link to="/Marketplace" className="px-3 py-2 hover:bg-green-700 rounded transition duration-150">Marketplace</Link>
-                <Link to="/my-card" className="px-3 py-2 hover:bg-green-700 rounded transition duration-150">Cards</Link>
+                {/* <Link to="/my-card" className="px-3 py-2 hover:bg-green-700 rounded transition duration-150">Cards</Link> */}
                 <Link to="/explore" className="px-3 py-2 hover:bg-green-700 rounded transition duration-150">Explore</Link>
                 <Link to="/cart" className="px-3 py-2 hover:bg-green-700 rounded transition duration-150">
                   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
