@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Clock, User, Tag, Wallet } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { ethers } from 'ethers';
+import { ArrowLeft, Clock, Tag, User, Wallet } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useWeb3 } from '../context/Web3Context';
-import { ethers } from 'ethers';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
@@ -381,10 +381,26 @@ const NFTDetail = () => {
                       // Wait for transaction to be mined
                       await tx.wait();
                       
+                      // toast.success("NFT purchased successfully!");
+                      // await tx.wait();
+
+                      // Record transaction in Supabase
+                      await supabase.from('transactions').insert([
+                        {
+                          nft_id: nft.id,
+                          type: 'sale',
+                          price: ethers.formatEther(price),
+                          buyer_id: account.toLowerCase(),  // ensure wallet is lowercase
+                          seller_id: onChainData.owner.toLowerCase(), // previous owner
+                        }
+                      ]);
+
                       toast.success("NFT purchased successfully!");
+                      window.location.reload();
+
                       
                       // Reload on-chain data
-                      window.location.reload();
+                      // window.location.reload();
                     } catch (error) {
                       console.error("Error buying NFT:", error);
                       toast.error("Failed to purchase NFT: " + error.message);

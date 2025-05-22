@@ -143,7 +143,7 @@ const AppRoutes = () => {
                 <ProfileEdit />
               </ProtectedRoute>
             } />
-             <Route path="/reset-password" element={
+             <Route path="/change-password" element={
               <ProtectedRoute>
                 <ResetPassword />
               </ProtectedRoute>
