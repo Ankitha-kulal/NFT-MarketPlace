@@ -98,63 +98,118 @@ const NFTDetail = () => {
   }, [id]);
   
   // Fetch on-chain data when contract is available
-  useEffect(() => {
-    const fetchOnChainData = async () => {
-      if (!nft || !contract || !nft.token_id) return;
+  // useEffect(() => {
+  //   const fetchOnChainData = async () => {
+  //     if (!nft || !contract || !nft.token_id) return;
       
-      try {
-        // Fetch token details from blockchain
-        const tokenId = nft.token_id;
+  //     try {
+  //       // Fetch token details from blockchain
+  //       const tokenId = nft.token_id;
         
-        // Get token owner
-        const ownerAddress = await contract.ownerOf(tokenId);
+  //       // Get token owner
+  //       const ownerAddress = await contract.ownerOf(tokenId);
         
-        // Get token URI
-        const tokenURI = await contract.tokenURI(tokenId);
+  //       // Get token URI
+  //       const tokenURI = await contract.tokenURI(tokenId);
         
-        // Get token creator
-        const creator = await contract.getCreator(tokenId);
+  //       // Get token creator
+  //       const creator = await contract.getCreator(tokenId);
         
-        // Get token price if listed
-        const listing = await contract.getTokenListing(tokenId);
-        const price = listing.price;
-        const isListed = listing.isListed;
+  //       // Get token price if listed
+  //       const listing = await contract.getTokenListing(tokenId);
+  //       const price = listing.price;
+  //       const isListed = listing.isListed;
         
-        // Get creator info from contract or database
-        let creatorName = "Unknown Creator";
-        try {
-          const { data } = await supabase
-            .from('profiles')
-            .select('username, avatar_url')
-            .eq('wallet_address', creator.toLowerCase())
-            .single();
+  //       // Get creator info from contract or database
+  //       let creatorName = "Unknown Creator";
+  //       try {
+  //         const { data } = await supabase
+  //           .from('profiles')
+  //           .select('username, avatar_url')
+  //           .eq('wallet_address', creator.toLowerCase())
+  //           .single();
             
-          if (data) {
-            creatorName = data.username;
-          }
-        } catch (error) {
-          console.error("Error fetching creator info:", error);
-        }
+  //         if (data) {
+  //           creatorName = data.username;
+  //         }
+  //       } catch (error) {
+  //         console.error("Error fetching creator info:", error);
+  //       }
         
-        setOnChainData({
-          owner: ownerAddress,
-          creator,
-          creatorName,
-          tokenURI,
-          price: price.toString(),
-          isListed
-        });
+  //       setOnChainData({
+  //         owner: ownerAddress,
+  //         creator,
+  //         creatorName,
+  //         tokenURI,
+  //         price: price.toString(),
+  //         isListed
+  //       });
         
-      } catch (error) {
-        console.error("Error fetching on-chain data:", error);
-        toast.error("Failed to load blockchain data");
-      }
-    };
+  //     } catch (error) {
+  //       console.error("Error fetching on-chain data:", error);
+  //       toast.error("Failed to load blockchain data");
+  //     }
+  //   };
     
-    if (contract && nft) {
-      fetchOnChainData();
+  //   if (contract && nft) {
+  //     fetchOnChainData();
+  //   }
+  // }, [contract, nft]);
+useEffect(() => {
+  const fetchOnChainData = async () => {
+    if (!nft || !contract || !nft.token_id) return;
+
+    try {
+      const tokenId = nft.token_id;
+
+      // Get token owner
+      const ownerAddress = await contract.ownerOf(tokenId);
+
+      // Get token URI
+      const tokenURI = await contract.tokenURI(tokenId);
+
+      // Get listing info
+      const listing = await contract.listings(tokenId);
+      const price = listing.price;
+      const isListed = listing.isListed;
+
+      // Set on-chain data
+      setOnChainData({
+        owner: ownerAddress,
+        tokenURI,
+        price: price.toString(),
+        isListed
+      });
+
+      // 🔁 Get on-chain transaction history
+      const [
+        fromAddresses,
+        toAddresses,
+        prices,
+        timestamps,
+        transactionTypes
+      ] = await contract.getTokenTransactionHistory(tokenId);
+
+      const chainTxHistory = fromAddresses.map((from, index) => ({
+        from: fromAddresses[index],
+        to: toAddresses[index],
+        price: ethers.formatEther(prices[index]),
+        timestamp: new Date(Number(timestamps[index]) * 1000).toISOString(),
+        type: transactionTypes[index]
+      }));
+
+      setTransactions(chainTxHistory);
+
+    } catch (error) {
+      console.error("Error fetching on-chain data:", error);
+      toast.error("Failed to load blockchain data");
     }
-  }, [contract, nft]);
+  };
+
+  if (contract && nft) {
+    fetchOnChainData();
+  }
+}, [contract, nft]);
 
   // Format date for transaction history
   const formatDate = (dateString) => {
@@ -363,55 +418,71 @@ const NFTDetail = () => {
               </div>
 
               {(nft.for_sale || (onChainData?.isListed)) && account && isCorrectNetwork && (
+                // <button 
+                //   onClick={async () => {
+                //     try {
+                //       // Handle buying the NFT
+                //       const tokenId = nft.token_id;
+                //       const price = onChainData?.price || ethers.parseEther(nft.price.toString());
+                      
+                //       toast.info("Please confirm the transaction in your wallet");
+                      
+                //       const tx = await contract.buyToken(tokenId, {
+                //         value: price
+                //       });
+                      
+                //       toast.info("Transaction submitted! Waiting for confirmation...");
+                      
+                //       // Wait for transaction to be mined
+                //       await tx.wait();
+                      
+                //       toast.success("NFT purchased successfully!");
+                      
+                //       // Reload on-chain data
+                //       window.location.reload();
+                //     } catch (error) {
+                //       console.error("Error buying NFT:", error);
+                //       toast.error("Failed to purchase NFT: " + error.message);
+                //     }
+                //   }}
+                //   className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300"
+                // >
+                //   Buy Now for {onChainData?.price 
+                //     ? `${ethers.formatEther(onChainData.price)} ETH` 
+                //     : `${nft.price} ETH`}
+                // </button>
                 <button 
-                  onClick={async () => {
-                    try {
-                      // Handle buying the NFT
-                      const tokenId = nft.token_id;
-                      const price = onChainData?.price || ethers.parseEther(nft.price.toString());
-                      
-                      toast.info("Please confirm the transaction in your wallet");
-                      
-                      const tx = await contract.buyToken(tokenId, {
-                        value: price
-                      });
-                      
-                      toast.info("Transaction submitted! Waiting for confirmation...");
-                      
-                      // Wait for transaction to be mined
-                      await tx.wait();
-                      
-                      // toast.success("NFT purchased successfully!");
-                      // await tx.wait();
+                onClick={async () => {
+                  try {
+                    const tokenId = nft.token_id;
+                    const price = onChainData?.price || ethers.parseEther(nft.price.toString());
 
-                      // Record transaction in Supabase
-                      await supabase.from('transactions').insert([
-                        {
-                          nft_id: nft.id,
-                          type: 'sale',
-                          price: ethers.formatEther(price),
-                          buyer_id: account.toLowerCase(),  // ensure wallet is lowercase
-                          seller_id: onChainData.owner.toLowerCase(), // previous owner
-                        }
-                      ]);
+                    toast.info("Please confirm the transaction in your wallet");
 
-                      toast.success("NFT purchased successfully!");
-                      window.location.reload();
+                    //  Call correct function from contract
+                    const tx = await contract.buyNFT(tokenId, {
+                      value: price
+                    });
 
-                      
-                      // Reload on-chain data
-                      // window.location.reload();
-                    } catch (error) {
-                      console.error("Error buying NFT:", error);
-                      toast.error("Failed to purchase NFT: " + error.message);
-                    }
-                  }}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300"
-                >
-                  Buy Now for {onChainData?.price 
-                    ? `${ethers.formatEther(onChainData.price)} ETH` 
-                    : `${nft.price} ETH`}
-                </button>
+                    toast.info("Transaction submitted! Waiting for confirmation...");
+
+                    await tx.wait();
+
+                    toast.success("NFT purchased successfully!");
+
+                    window.location.reload();
+                  } catch (error) {
+                    console.error("Error buying NFT:", error);
+                    toast.error("Failed to purchase NFT: " + error.message);
+                  }
+                }}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300"
+              >
+                Buy Now for {onChainData?.price 
+                  ? `${ethers.formatEther(onChainData.price)} ETH` 
+                  : `${nft.price} ETH`}
+              </button>
+
               )}
             </div>
           </div>
@@ -434,7 +505,7 @@ const NFTDetail = () => {
                       <th className={`px-4 py-3 text-left ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Date</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  {/* <tbody>
                     {transactions.map((tx) => (
                       <tr 
                         key={tx.id}
@@ -476,7 +547,33 @@ const NFTDetail = () => {
                         <td className="px-4 py-4 text-sm">{formatDate(tx.created_at)}</td>
                       </tr>
                     ))}
-                  </tbody>
+                  </tbody> */}
+                  <tbody>
+                  {transactions.map((tx, index) => (
+                    <tr
+                      key={index}
+                      className={`border-b ${darkMode ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-100 hover:bg-gray-50'}`}
+                    >
+                      <td className="px-4 py-4 flex items-center">
+                        {tx.type === 'sale' ? (
+                          <Tag size={16} className="mr-2 text-green-500" />
+                        ) : (
+                          <Clock size={16} className="mr-2 text-blue-500" />
+                        )}
+                        <span className="capitalize">{tx.type}</span>
+                      </td>
+                      <td className="px-4 py-4 font-medium">{tx.price} ETH</td>
+                      <td className="px-4 py-4 text-sm">
+                        {tx.from.slice(0, 6)}...{tx.from.slice(-4)}
+                      </td>
+                      <td className="px-4 py-4 text-sm">
+                        {tx.to.slice(0, 6)}...{tx.to.slice(-4)}
+                      </td>
+                      <td className="px-4 py-4 text-sm">{formatDate(tx.timestamp)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+
                 </table>
               </div>
             ) : (
