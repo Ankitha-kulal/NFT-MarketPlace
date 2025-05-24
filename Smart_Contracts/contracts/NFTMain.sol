@@ -5,8 +5,9 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
+contract NFTMain is ERC721URIStorage, ERC2981, Ownable, ReentrancyGuard  {
     using Counters for Counters.Counter;
 
     Counters.Counter private _tokenIds;
@@ -18,6 +19,14 @@ contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
         bool isListed;
     }
     
+    struct Auction {
+        address seller;
+        uint256 highestBid;
+        address highestBidder;
+        uint256 endTime;
+        bool active;
+    }
+
     struct Transaction {
         address from;
         address to;
@@ -28,7 +37,8 @@ contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
     
     // Mapping from token ID to its transaction history
     mapping(uint256 => Transaction[]) private _tokenTransactions;
-    
+    mapping(uint256 => Auction) public auctions;
+    mapping(uint256 => mapping(address => uint256)) public bids;
     mapping(uint256 => Listing) public listings;
     
     event NFTMinted(uint256 indexed tokenId, address indexed owner, string tokenURI);
@@ -36,6 +46,9 @@ contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
     event NFTSold(uint256 indexed tokenId, address indexed buyer, uint256 price);
     event ListingCancelled(uint256 indexed tokenId);
     event TransactionRecorded(uint256 indexed tokenId, address from, address to, string transactionType);
+    event AuctionStarted(uint256 indexed tokenId, uint256 minBid, uint256 duration);
+    event BidPlaced(uint256 indexed tokenId, address indexed bidder, uint256 bid);
+    event AuctionEnded(uint256 indexed tokenId, address winner, uint256 amount);
 
     constructor() ERC721("MyNFT", "MNFT") {}
 
@@ -131,6 +144,61 @@ contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
         
         (bool success, ) = payable(owner()).call{value: balance}("");
         require(success, "Transfer failed");
+    }
+    
+
+    function startAuction(uint256 tokenId, uint256 minBid, uint256 duration) external {
+        require(ownerOf(tokenId) == msg.sender, "Not token owner");
+        require(!auctions[tokenId].active, "Auction already active");
+
+        auctions[tokenId] = Auction({
+            seller: msg.sender,
+            highestBid: minBid,
+            highestBidder: address(0),
+            endTime: block.timestamp + duration,
+            active: true
+        });
+
+        approve(address(this), tokenId);
+        emit AuctionStarted(tokenId, minBid, duration);
+    }
+
+    function placeBid(uint256 tokenId) external payable {
+        Auction storage auction = auctions[tokenId];
+        require(auction.active, "Auction not active");
+        require(block.timestamp < auction.endTime, "Auction ended");
+        require(msg.value > auction.highestBid, "Bid too low");
+
+        if (auction.highestBidder != address(0)) {
+            bids[tokenId][auction.highestBidder] += auction.highestBid;
+        }
+
+        auction.highestBid = msg.value;
+        auction.highestBidder = msg.sender;
+
+        emit BidPlaced(tokenId, msg.sender, msg.value);
+    }
+
+    function endAuction(uint256 tokenId) external nonReentrant {
+        Auction storage auction = auctions[tokenId];
+        require(auction.active, "Auction not active");
+        require(block.timestamp >= auction.endTime, "Auction not yet ended");
+
+        auction.active = false;
+
+        if (auction.highestBidder != address(0)) {
+            _transfer(auction.seller, auction.highestBidder, tokenId);
+            payable(auction.seller).transfer(auction.highestBid);
+            _recordTransaction(tokenId, auction.seller, auction.highestBidder, auction.highestBid, "auction");
+            emit AuctionEnded(tokenId, auction.highestBidder, auction.highestBid);
+        }
+    }
+
+    function withdrawBid(uint256 tokenId) external nonReentrant {
+        uint256 refund = bids[tokenId][msg.sender];
+        require(refund > 0, "No funds to withdraw");
+        bids[tokenId][msg.sender] = 0;
+        payable(msg.sender).transfer(refund);
     }
     
     /// @notice Internal function to record token transactions
