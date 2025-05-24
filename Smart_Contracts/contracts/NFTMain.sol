@@ -59,7 +59,6 @@ contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
         
         // Record the minting transaction
         _recordTransaction(newTokenId, address(0), msg.sender, 0, "mint");
-
         emit NFTMinted(newTokenId, msg.sender, tokenURI);
         return newTokenId;
     }
@@ -132,7 +131,6 @@ contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
         (bool success, ) = payable(owner()).call{value: balance}("");
         require(success, "Transfer failed");
     }
-    
     /// @notice Internal function to record token transactions
     function _recordTransaction(
         uint256 tokenId,
@@ -148,11 +146,10 @@ contract NFTMain is ERC721URIStorage, ERC2981, Ownable {
             timestamp: block.timestamp,
             transactionType: transactionType
         });
-        
         _tokenTransactions[tokenId].push(newTransaction);
         emit TransactionRecorded(tokenId, from, to, transactionType);
     }
-    
+
     /// @notice Override _transfer to record token transfers
     function _transfer(
         address from,
