@@ -335,7 +335,7 @@ useEffect(() => {
 
   const startAuction = async () => {
   try {
-    const minBid = ethers.parseEther("0.1"); // Default 0.1 ETH
+    const minBid = ethers.parseEther("0.001"); // Default 0.1 ETH
     const duration = 600; // 10 minutes in seconds
 
     const tx = await contract.startAuction(nft.token_id, minBid, duration);
@@ -646,7 +646,7 @@ const withdrawBid = async () => {
                   </button>
                 </div>
 
-                {account?.toLowerCase() === auction?.seller?.toLowerCase() && (
+               {account?.toLowerCase() === onChainData?.owner?.toLowerCase() && auction?.active && (
                   <button
                     onClick={endAuction}
                     className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg"
