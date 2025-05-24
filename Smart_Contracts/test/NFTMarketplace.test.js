@@ -329,3 +329,68 @@ describe("NFT Marketplace", function () {
     });
   });
 });
+
+
+describe("Auction Functionality", function () {
+  it("Should allow starting, bidding and ending an auction", async function () {
+    // 1. Mint NFT by seller
+    await marketplace.connect(seller).mintNFT(
+      TOKEN_URI,
+      ethers.ZeroAddress,
+      0,
+      { value: listingPrice }
+    );
+
+    // 2. Start Auction
+    const minBid = ethers.parseEther("1");
+    const duration = 60; // seconds
+    await marketplace.connect(seller).startAuction(1, minBid, duration);
+
+    // 3. Place bid by buyer
+    await marketplace.connect(buyer).placeBid(1, { value: ethers.parseEther("1.2") });
+
+    // 4. Place higher bid by thirdParty
+    await marketplace.connect(thirdParty).placeBid(1, { value: ethers.parseEther("1.5") });
+
+    // 5. Wait for auction to end
+    await network.provider.send("evm_increaseTime", [61]);
+    await network.provider.send("evm_mine");
+
+    // 6. End auction
+    const tx = await marketplace.connect(seller).endAuction(1);
+    await tx.wait();
+
+    // 7. Check final owner
+    expect(await marketplace.ownerOf(1)).to.equal(thirdParty.address);
+
+    // 8. Check transaction history
+    const history = await marketplace.getTokenTransactionHistory(1);
+    const lastIndex = history.fromAddresses.length - 1;
+    expect(history.transactionTypes[lastIndex]).to.equal("auction");
+    expect(history.toAddresses[lastIndex]).to.equal(thirdParty.address);
+  });
+
+  it("Should allow refunding outbid participants", async function () {
+    // Mint and start auction
+    await marketplace.connect(seller).mintNFT(TOKEN_URI, ethers.ZeroAddress, 0, { value: listingPrice });
+    await marketplace.connect(seller).startAuction(1, ethers.parseEther("1"), 60);
+
+    // Place bid by buyer
+    await marketplace.connect(buyer).placeBid(1, { value: ethers.parseEther("1.2") });
+
+    // Place higher bid by thirdParty
+    await marketplace.connect(thirdParty).placeBid(1, { value: ethers.parseEther("1.5") });
+
+    // Check refund
+    const refund = await marketplace.bids(1, buyer.address);
+    expect(refund).to.equal(ethers.parseEther("1.2"));
+
+    // Withdraw refund
+    const initial = await ethers.provider.getBalance(buyer.address);
+    const tx = await marketplace.connect(buyer).withdrawBid(1);
+    const receipt = await tx.wait();
+    const gasUsed = receipt.gasUsed * receipt.gasPrice;
+    const final = await ethers.provider.getBalance(buyer.address);
+    expect(final - initial + gasUsed).to.equal(refund);
+  });
+});

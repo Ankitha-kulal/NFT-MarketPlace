@@ -19,7 +19,10 @@ const NFTDetail = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [onChainData, setOnChainData] = useState(null);
   const [creatorProfile, setCreatorProfile] = useState(null);
-  
+  const [auction, setAuction] = useState(null);
+const [bidAmount, setBidAmount] = useState('');
+const [bidsRefundable, setBidsRefundable] = useState(false);
+
   // Get web3 context
   const { 
     account, 
@@ -155,6 +158,64 @@ const NFTDetail = () => {
   //     fetchOnChainData();
   //   }
   // }, [contract, nft]);
+// useEffect(() => {
+//   const fetchOnChainData = async () => {
+//     if (!nft || !contract || !nft.token_id) return;
+
+//     try {
+
+
+//       const tokenId = nft.token_id;
+
+//       // Get token owner
+//       const ownerAddress = await contract.ownerOf(tokenId);
+
+//       // Get token URI
+//       const tokenURI = await contract.tokenURI(tokenId);
+
+//       // Get listing info
+//       const listing = await contract.listings(tokenId);
+//       const price = listing.price;
+//       const isListed = listing.isListed;
+
+//       // Set on-chain data
+//       setOnChainData({
+//         owner: ownerAddress,
+//         tokenURI,
+//         price: price.toString(),
+//         isListed
+//       });
+
+//       // 🔁 Get on-chain transaction history
+//       const [
+//         fromAddresses,
+//         toAddresses,
+//         prices,
+//         timestamps,
+//         transactionTypes
+//       ] = await contract.getTokenTransactionHistory(tokenId);
+
+//       const chainTxHistory = fromAddresses.map((from, index) => ({
+//         from: fromAddresses[index],
+//         to: toAddresses[index],
+//         price: ethers.formatEther(prices[index]),
+//         timestamp: new Date(Number(timestamps[index]) * 1000).toISOString(),
+//         type: transactionTypes[index]
+//       }));
+
+//       setTransactions(chainTxHistory);
+
+//     } catch (error) {
+//       console.error("Error fetching on-chain data:", error);
+//       toast.error("Failed to load blockchain data");
+//     }
+//   };
+
+//   if (contract && nft) {
+//     fetchOnChainData();
+//   }
+// }, [contract, nft]);
+
 useEffect(() => {
   const fetchOnChainData = async () => {
     if (!nft || !contract || !nft.token_id) return;
@@ -200,6 +261,20 @@ useEffect(() => {
 
       setTransactions(chainTxHistory);
 
+      // 🔁 Get auction info if available
+      const auctionData = await contract.auctions(tokenId);
+      if (auctionData.active) {
+        setAuction({
+          seller: auctionData.seller,
+          highestBid: auctionData.highestBid.toString(),
+          highestBidder: auctionData.highestBidder,
+          endTime: auctionData.endTime.toString()
+        });
+
+        const refund = await contract.bids(tokenId, account);
+        setBidsRefundable(refund > 0n);
+      }
+
     } catch (error) {
       console.error("Error fetching on-chain data:", error);
       toast.error("Failed to load blockchain data");
@@ -209,7 +284,8 @@ useEffect(() => {
   if (contract && nft) {
     fetchOnChainData();
   }
-}, [contract, nft]);
+}, [contract, nft, account]); // 👈 include account so refund check works
+
 
   // Format date for transaction history
   const formatDate = (dateString) => {
@@ -255,6 +331,57 @@ useEffect(() => {
     
     return '/api/placeholder/32/32';
   };
+
+
+  const startAuction = async () => {
+  try {
+    const minBid = ethers.parseEther("0.1"); // Default 0.1 ETH
+    const duration = 600; // 10 minutes in seconds
+
+    const tx = await contract.startAuction(nft.token_id, minBid, duration);
+    await tx.wait();
+
+    toast.success("Auction started!");
+    window.location.reload();
+  } catch (err) {
+    console.error("Start auction failed:", err);
+    toast.error("Failed to start auction: " + err.message);
+  }
+};
+
+const placeBid = async () => {
+  try {
+    const value = ethers.parseEther(bidAmount);
+    const tx = await contract.placeBid(nft.token_id, { value });
+    await tx.wait();
+    toast.success('Bid placed!');
+    window.location.reload();
+  } catch (err) {
+    toast.error('Failed to place bid: ' + err.message);
+  }
+};
+
+const endAuction = async () => {
+  try {
+    const tx = await contract.endAuction(nft.token_id);
+    await tx.wait();
+    toast.success('Auction ended');
+    window.location.reload();
+  } catch (err) {
+    toast.error('Failed to end auction: ' + err.message);
+  }
+};
+
+const withdrawBid = async () => {
+  try {
+    const tx = await contract.withdrawBid(nft.token_id);
+    await tx.wait();
+    toast.success('Refund withdrawn');
+    window.location.reload();
+  } catch (err) {
+    toast.error('Withdraw failed: ' + err.message);
+  }
+};
 
   if (isLoading) {
     return (
@@ -484,6 +611,61 @@ useEffect(() => {
               </button>
 
               )}
+              {account?.toLowerCase() === onChainData?.owner?.toLowerCase() && !auction?.active && (
+                <button
+                  onClick={startAuction}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 mb-4"
+                >
+                  Start Auction (0.1 ETH / 10 min)
+                </button>
+              )}
+
+              {onChainData?.isListed === false && contract && nft?.token_id && (
+              <div className={`p-4 rounded-lg mb-6 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                <h3 className="text-xl font-semibold mb-2">Auction</h3>
+
+                <div className="mb-3 text-sm">
+                  <p>Highest Bid: {ethers.formatEther(auction?.highestBid || '0')} ETH</p>
+                  <p>Highest Bidder: {auction?.highestBidder?.slice(0, 6)}...{auction?.highestBidder?.slice(-4)}</p>
+                  <p>Auction Ends: {auction?.endTime ? new Date(Number(auction.endTime) * 1000).toLocaleString() : '--'}</p>
+                </div>
+
+                <div className="flex items-center space-x-2 mb-2">
+                  <input
+                    type="number"
+                    placeholder="Your bid in ETH"
+                    value={bidAmount}
+                    onChange={(e) => setBidAmount(e.target.value)}
+                    className="border px-3 py-2 rounded-lg w-full"
+                  />
+                  <button
+                    onClick={placeBid}
+                    className="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg"
+                  >
+                    Place Bid
+                  </button>
+                </div>
+
+                {account?.toLowerCase() === auction?.seller?.toLowerCase() && (
+                  <button
+                    onClick={endAuction}
+                    className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg"
+                  >
+                    End Auction
+                  </button>
+                )}
+
+                {bidsRefundable && (
+                  <button
+                    onClick={withdrawBid}
+                    className="mt-2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold px-4 py-2 rounded-lg"
+                  >
+                    Withdraw Previous Bid
+                  </button>
+                )}
+              </div>
+            )}
+
             </div>
           </div>
         </div>

@@ -3,7 +3,7 @@ export const SUPPORTED_CHAIN_ID = 11155111; // Sepolia testnet
 export const NETWORK_NAME = 'Sepolia';
 
 // Contract Configuration
-export const CONTRACT_ADDRESS = '0x3D7c08a77e0cBb471b357412faD57a66503E1175'; // Replace with your actual contract address
+export const CONTRACT_ADDRESS = '0x9d91c1FA83a490eE4c1F398531F6EC4024Ee9b89'; // Replace with your actual contract address
 
 // IPFS Configuration
 export const PINATA_GATEWAY = 'https://gateway.pinata.cloud/ipfs/';
