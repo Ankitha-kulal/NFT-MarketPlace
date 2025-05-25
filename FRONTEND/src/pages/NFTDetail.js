@@ -268,7 +268,8 @@ useEffect(() => {
           seller: auctionData.seller,
           highestBid: auctionData.highestBid.toString(),
           highestBidder: auctionData.highestBidder,
-          endTime: auctionData.endTime.toString()
+          endTime: auctionData.endTime.toString(),
+          active: auctionData.active
         });
 
         const refund = await contract.bids(tokenId, account);
@@ -333,21 +334,46 @@ useEffect(() => {
   };
 
 
-  const startAuction = async () => {
-  try {
-    const minBid = ethers.parseEther("0.001"); // Default 0.1 ETH
-    const duration = 600; // 10 minutes in seconds
+//   const startAuction = async () => {
+//   try {
+//     const minBid = ethers.parseEther("0.001"); // Default 0.1 ETH
+//     const duration = 60; // 10 minutes in seconds
 
-    const tx = await contract.startAuction(nft.token_id, minBid, duration);
-    await tx.wait();
+//     const tx = await contract.startAuction(nft.token_id, minBid, duration);
+//     await tx.wait();
 
-    toast.success("Auction started!");
-    window.location.reload();
-  } catch (err) {
-    console.error("Start auction failed:", err);
-    toast.error("Failed to start auction: " + err.message);
-  }
-};
+//     toast.success("Auction started!");
+//     window.location.reload();
+//   } catch (err) {
+//     console.error("Start auction failed:", err);
+//     toast.error("Failed to start auction: " + err.message);
+//   }
+// };
+const startAuction = async () => {
+    try {
+      const minBid = ethers.parseEther("0.001");
+      const duration = 60;
+      const tx = await contract.startAuction(nft.token_id, minBid, duration);
+      await tx.wait();
+      toast.success("Auction started!");
+
+      const auctionData = await contract.auctions(nft.token_id);
+      setAuction({
+        seller: auctionData.seller,
+        highestBid: auctionData.highestBid.toString(),
+        highestBidder: auctionData.highestBidder,
+        endTime: auctionData.endTime.toString(),
+        active: auctionData.active
+      });
+    } catch (err) {
+      console.error("Start auction failed:", err);
+      if (err.message.includes("Auction already active")) {
+        toast.error("Auction has already been started.");
+      } else {
+        toast.error("Failed to start auction: " + err.message);
+      }
+    }
+  };
 
 const placeBid = async () => {
   try {
@@ -544,7 +570,7 @@ const withdrawBid = async () => {
                 </div>
               </div>
 
-              {(nft.for_sale || (onChainData?.isListed)) && account && isCorrectNetwork && (
+              {/* {(nft.for_sale || (onChainData?.isListed)) && account && isCorrectNetwork && (
                 // <button 
                 //   onClick={async () => {
                 //     try {
@@ -610,17 +636,63 @@ const withdrawBid = async () => {
                   : `${nft.price} ETH`}
               </button>
 
+              )} */}
+              {(nft.for_sale || (onChainData?.isListed)) &&
+              account &&
+              isCorrectNetwork &&
+              account.toLowerCase() !== onChainData?.owner?.toLowerCase() && (
+                <button 
+                  onClick={async () => {
+                    try {
+                      const tokenId = nft.token_id;
+                      const price = onChainData?.price || ethers.parseEther(nft.price.toString());
+
+                      toast.info("Please confirm the transaction in your wallet");
+
+                      const tx = await contract.buyNFT(tokenId, { value: price });
+
+                      toast.info("Transaction submitted! Waiting for confirmation...");
+
+                      await tx.wait();
+
+                      toast.success("NFT purchased successfully!");
+                      window.location.reload();
+                    } catch (error) {
+                      console.error("Error buying NFT:", error);
+                      toast.error("Failed to purchase NFT: " + error.message);
+                    }
+                  }}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300"
+                >
+                  Buy Now for {onChainData?.price 
+                    ? `${ethers.formatEther(onChainData.price)} ETH` 
+                    : `${nft.price} ETH`}
+                </button>
               )}
-              {account?.toLowerCase() === onChainData?.owner?.toLowerCase() && !auction?.active && (
+
+              {/* {account?.toLowerCase() === onChainData?.owner?.toLowerCase() && !auction?.active && (
                 <button
                   onClick={startAuction}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 mb-4"
                 >
                   Start Auction (0.1 ETH / 10 min)
                 </button>
-              )}
+              )} */}
+              {account?.toLowerCase() === onChainData?.owner?.toLowerCase() &&
+                (!auction || !auction.active) && (
+                  <button
+                    onClick={startAuction}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 mb-4"
+                  >
+                    Start Auction (0.1 ETH / 10 min)
+                  </button>
+                )}
 
-              {onChainData?.isListed === false && contract && nft?.token_id && (
+
+             
+            
+            {/* {onChainData?.isListed === false && contract && nft?.token_id && ( */}
+                {auction?.active && contract && nft?.token_id && (
               <div className={`p-4 rounded-lg mb-6 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
                 <h3 className="text-xl font-semibold mb-2">Auction</h3>
 
@@ -646,14 +718,23 @@ const withdrawBid = async () => {
                   </button>
                 </div>
 
-               {account?.toLowerCase() === onChainData?.owner?.toLowerCase() && auction?.active && (
+               {/* {account?.toLowerCase() === onChainData?.owner?.toLowerCase() && auction?.active && ( */}
+               {/* {auction?.active && account?.toLowerCase() === auction?.seller?.toLowerCase() && (
                   <button
                     onClick={endAuction}
                     className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg"
                   >
                     End Auction
                   </button>
-                )}
+                )} */}
+                    {auction?.active && account?.toLowerCase() === auction?.seller?.toLowerCase() && (
+      <button
+        onClick={endAuction}
+        className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg"
+      >
+        End Auction
+      </button>
+    )}
 
                 {bidsRefundable && (
                   <button
