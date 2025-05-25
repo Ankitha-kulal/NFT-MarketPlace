@@ -9,16 +9,23 @@ import { ethers } from 'ethers';
 // Initialize Supabase client
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error("Supabase environment variables are missing!");
+}
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const Marketplace = () => {
+  /** @type {[any[], Function]} */
   const [nfts, setNfts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [category, setCategory] = useState('');
   const [darkMode, setDarkMode] = useState(false);
+  /** @type {[string[], Function]} */
   const [categories, setCategories] = useState([]);
   const [onChainData, setOnChainData] = useState({});
+  const [activeTab, setActiveTab] = useState('NFTs');
+  
   
   // Get web3 context
   const { 
@@ -183,7 +190,20 @@ const Marketplace = () => {
     setDarkMode(!darkMode);
   };
 
-  const filteredNfts = nfts;
+  const allCreators = [...new Set(nfts.map(nft => nft.profiles?.username).filter(Boolean))];
+
+  const filteredCreators = allCreators.filter(creator =>
+  creator.toLowerCase().includes(searchTerm.toLowerCase())
+);
+
+
+  // const filteredNfts = nfts;
+
+  const filteredNfts = nfts.filter(nft => 
+  nft.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  nft.category.toLowerCase().includes(searchTerm.toLowerCase())
+);
+
 
   return (
     <div className={`${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'} min-h-screen transition-colors duration-300`}>
@@ -256,80 +276,129 @@ const Marketplace = () => {
             </div>
           </div>
         </div>
-        
-        {isLoading ? (
-          <div className="flex justify-center my-12">
-            <div className={`animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 ${darkMode ? 'border-green-500' : 'border-green-600'}`}></div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredNfts.map((nft) => (
-              <Link 
-                to={`/nft/${nft.id}`}
-                key={nft.id}
-                className={`rounded-xl shadow-md overflow-hidden transition-transform duration-300 hover:shadow-lg hover:transform hover:scale-105 ${
-                  darkMode ? 'bg-gray-800' : 'bg-white'
-                }`}
-              >
-                <div className="relative">
+
+        {/* .................... */}
+        <div className="flex space-x-4 mb-6">
+  {['NFTs', 'Creators'].map(tab => (
+    <button
+      key={tab}
+      onClick={() => setActiveTab(tab)}
+      className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+        activeTab === tab
+          ? 'bg-green-600 text-white'
+          : darkMode
+          ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+      }`}
+    >
+      {tab}
+    </button>
+  ))}
+</div>
+
+{isLoading ? (
+  <div className="flex justify-center my-12">
+    <div className={`animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 ${darkMode ? 'border-green-500' : 'border-green-600'}`}></div>
+  </div>
+) : (
+  activeTab === 'NFTs' ? (
+    filteredNfts.length === 0 ? (
+      <div className={`text-center py-12 ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>
+        <svg className={`mx-auto h-12 w-12 ${darkMode ? 'text-gray-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <h3 className={`mt-2 text-lg font-medium ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>No NFTs found</h3>
+        <p className={`mt-1 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Try changing your search or filter criteria.</p>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredNfts.map((nft) => (
+          <Link 
+            to={`/nft/${nft.id}`}
+            key={nft.id}
+            className={`rounded-xl shadow-md overflow-hidden transition-transform duration-300 hover:shadow-lg hover:transform hover:scale-105 ${
+              darkMode ? 'bg-gray-800' : 'bg-white'
+            }`}
+          >
+            <div className="relative">
+              <img 
+                src={nft.image_url || '/api/placeholder/400/320'} 
+                alt={nft.title} 
+                className="w-full h-64 object-cover"
+              />
+              <div className="absolute top-3 right-3 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full uppercase">
+                {nft.category}
+              </div>
+            </div>
+            <div className="p-5">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>{nft.title}</h3>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  darkMode ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-800'
+                }`}>
+                  {onChainData[nft.id]?.isListed
+                    ? `${ethers.formatEther(onChainData[nft.id].price)} ETH`
+                    : `${nft.price} ETH`}
+                </span>
+              </div>
+              <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                {nft.description || 'No description available'}
+              </p>
+              <div className={`flex justify-between items-center pt-3 border-t ${
+                darkMode ? 'border-gray-700' : 'border-gray-100'
+              }`}>
+                <div className="flex items-center">
                   <img 
-                    src={nft.image_url || '/api/placeholder/400/320'} 
-                    alt={nft.title} 
-                    className="w-full h-64 object-cover"
+                    src={nft.profiles?.avatar_url || '/api/placeholder/32/32'} 
+                    alt={nft.profiles?.username || 'Creator'} 
+                    className="w-6 h-6 rounded-full mr-2 bg-gray-200"
                   />
-                  <div className="absolute top-3 right-3 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full uppercase">
-                    {nft.category}
-                  </div>
+                  <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {onChainData[nft.id]?.creatorName || nft.profiles?.username || 'Unknown Creator'}
+                  </span>
                 </div>
-                <div className="p-5">
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>{nft.title}</h3>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      darkMode ? 'bg-green-900 text-green-300' : 'bg-green-100 text-green-800'
-                    }`}>
-                      {onChainData[nft.id]?.isListed
-                        ? `${ethers.formatEther(onChainData[nft.id].price)} ETH`
-                        : `${nft.price} ETH`}
-                    </span>
-                  </div>
-                  <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                    {nft.description || 'No description available'}
-                  </p>
-                  <div className={`flex justify-between items-center pt-3 border-t ${
-                    darkMode ? 'border-gray-700' : 'border-gray-100'
-                  }`}>
-                    <div className="flex items-center">
-                      <img 
-                        src={nft.profiles?.avatar_url || '/api/placeholder/32/32'} 
-                        alt={nft.profiles?.username || 'Creator'} 
-                        className="w-6 h-6 rounded-full mr-2 bg-gray-200"
-                      />
-                      <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {onChainData[nft.id]?.creatorName || nft.profiles?.username || 'Unknown Creator'}
-                      </span>
-                    </div>
-                    <div className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-300">
-                      {nft.for_sale ? 'Buy Now' : 'View'}
-                    </div>
-                  </div>
+                <div className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-300">
+                  {nft.for_sale ? 'Buy Now' : 'View'}
                 </div>
-              </Link>
-            ))}
-          </div>
-        )}
-        
-        {!isLoading && filteredNfts.length === 0 && (
-          <div className={`text-center py-12 ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    )
+  ) : (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {filteredCreators.map((creatorName, index) => (
+        <div
+          key={index}
+          className={`rounded-xl shadow-md p-6 flex items-center space-x-4 ${
+            darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
+          }`}
+        >
+          <img
+            src="/api/placeholder/64/64"
+            alt={creatorName}
+            className="w-12 h-12 rounded-full bg-gray-300"
+          />
+          <span className="text-lg font-medium">{creatorName}</span>
+        </div>
+      ))}
+    </div>
+  )
+)}
+{!isLoading && activeTab === 'Creators' && filteredCreators.length === 0 && (
+  <div className={`text-center py-12 ${darkMode ? 'text-gray-300' : 'text-gray-900'}`}>
             <svg className={`mx-auto h-12 w-12 ${darkMode ? 'text-gray-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <h3 className={`mt-2 text-lg font-medium ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>No NFTs found</h3>
+            <h3 className={`mt-2 text-lg font-medium ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>No Creators found</h3>
             <p className={`mt-1 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Try changing your search or filter criteria.</p>
           </div>
-        )}
-      </div>
+)}
+  </div>
     </div>
   );
 };
 
 export default Marketplace;
+
