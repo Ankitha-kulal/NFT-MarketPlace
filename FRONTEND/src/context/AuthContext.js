@@ -11,21 +11,28 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   
+  // Track if we've already shown login toast to prevent duplicates
+  const [lastToastId, setLastToastId] = useState(null);
+  
   // Initialize auth state when component mounts
   useEffect(() => {
+    let isMounted = true; // Prevent state updates after unmount
+    
     const initializeAuth = async () => {
       try {
         // Check current session
         const { data } = await supabase.auth.getSession();
         
-        if (data.session) {
+        if (data.session && isMounted) {
           setUser(data.session.user);
         }
       } catch (error) {
         console.error("Error initializing auth:", error);
       } finally {
-        setLoading(false);
-        setIsInitialized(true);
+        if (isMounted) {
+          setLoading(false);
+          setIsInitialized(true);
+        }
       }
     };
     
@@ -34,24 +41,43 @@ export function AuthProvider({ children }) {
     // Set up auth state change listener
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth event:', event);
+        console.log('Auth event:', event, 'User ID:', session?.user?.id);
+        
+        if (!isMounted) return; // Prevent updates if component unmounted
+        
         if (event === 'SIGNED_IN') {
           setUser(session?.user || null);
-          toast.success("Successfully signed in!");
+          
+          // PREVENT DUPLICATE TOASTS - Use unique toast ID
+          const toastId = `signin-${session?.user?.id}-${Date.now()}`;
+          if (lastToastId !== toastId) {
+            toast.success("Successfully signed in!", {
+              toastId: 'signin-success', // Same ID prevents duplicates
+              autoClose: 3000
+            });
+            setLastToastId(toastId);
+          }
+          
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
-          toast.info("You have been signed out");
+          toast.info("You have been signed out", {
+            toastId: 'signout-info' // Prevent duplicate signout toasts
+          });
+          setLastToastId(null); // Reset toast tracking
+          
         } else if (event === 'USER_UPDATED') {
           setUser(session?.user || null);
+          // Don't show toast for user updates unless needed
         }
       }
     );
     
     // Cleanup listener on unmount
     return () => {
+      isMounted = false;
       authListener?.subscription?.unsubscribe();
     };
-  }, []);
+  }, []); // Empty dependency array - run only once
   
   // Check for an existing session
   const checkUserSession = useCallback(async () => {
@@ -72,7 +98,9 @@ export function AuthProvider({ children }) {
       }
     } catch (error) {
       console.error("Error checking user session:", error);
-      toast.error("Error checking authentication status");
+      toast.error("Error checking authentication status", {
+        toastId: 'session-error'
+      });
     } finally {
       setLoading(false);
     }
@@ -94,7 +122,9 @@ export function AuthProvider({ children }) {
       }
       
       if (existingUsers && existingUsers.length > 0) {
-        toast.error('Username already taken. Please choose another.');
+        toast.error('Username already taken. Please choose another.', {
+          toastId: 'username-taken'
+        });
         return { error: { message: 'Username already taken' } };
       }
       
@@ -115,13 +145,18 @@ export function AuthProvider({ children }) {
       
       toast.success(
         "Registration successful! Please check your email to confirm your account.",
-        { autoClose: 5000 }
+        { 
+          autoClose: 5000,
+          toastId: 'signup-success'
+        }
       );
       
       return { data };
     } catch (error) {
       console.error("Error signing up:", error);
-      toast.error(`Registration failed: ${error.message}`);
+      toast.error(`Registration failed: ${error.message}`, {
+        toastId: 'signup-error'
+      });
       return { error };
     } finally {
       setLoading(false);
@@ -141,17 +176,27 @@ export function AuthProvider({ children }) {
       if (error) throw error;
       
       setUser(data.user);
+      
+      // DON'T show toast here - let the auth listener handle it
+      // This prevents double toasts (one here + one from listener)
+      
       return { data };
     } catch (error) {
       console.error("Error signing in:", error);
       
       // Provide user-friendly error messages
       if (error.message.includes('Invalid login credentials')) {
-        toast.error('Invalid email or password. Please try again.');
+        toast.error('Invalid email or password. Please try again.', {
+          toastId: 'signin-error'
+        });
       } else if (error.message.includes('Email not confirmed')) {
-        toast.error('Please confirm your email before logging in.');
+        toast.error('Please confirm your email before logging in.', {
+          toastId: 'email-unconfirmed'
+        });
       } else {
-        toast.error(`Login failed: ${error.message}`);
+        toast.error(`Login failed: ${error.message}`, {
+          toastId: 'signin-error'
+        });
       }
       
       return { error };
@@ -167,7 +212,9 @@ export function AuthProvider({ children }) {
       
       // Check if MetaMask is installed
       if (!window.ethereum) {
-        toast.error('MetaMask not detected. Please install it first.');
+        toast.error('MetaMask not detected. Please install it first.', {
+          toastId: 'metamask-missing'
+        });
         window.open('https://metamask.io/download.html', '_blank');
         return { error: { message: 'MetaMask not installed' } };
       }
@@ -204,14 +251,17 @@ export function AuthProvider({ children }) {
         });
         
         if (error) {
-          // If we can't sign in, we may need to handle this differently
           console.error("Error signing in with existing wallet:", error);
-          toast.error('Error authenticating with wallet. Please try again.');
+          toast.error('Error authenticating with wallet. Please try again.', {
+            toastId: 'wallet-signin-error'
+          });
           return { error };
         }
         
         setUser(data.user);
-        toast.success('Successfully signed in with wallet!');
+        
+        // DON'T show toast here - let auth listener handle it
+        
         return { data };
       }
       
@@ -222,9 +272,13 @@ export function AuthProvider({ children }) {
       
       // User-friendly error messages
       if (error.message.includes('User rejected')) {
-        toast.error('Connection rejected. Please approve the request in your wallet.');
+        toast.error('Connection rejected. Please approve the request in your wallet.', {
+          toastId: 'wallet-rejected'
+        });
       } else {
-        toast.error(`Failed to connect wallet: ${error.message}`);
+        toast.error(`Failed to connect wallet: ${error.message}`, {
+          toastId: 'wallet-error'
+        });
       }
       
       return { error };
@@ -242,10 +296,14 @@ export function AuthProvider({ children }) {
       if (error) throw error;
       
       setUser(null);
-      toast.success('Successfully signed out!');
+      
+      // DON'T show toast here - let auth listener handle it
+      
     } catch (error) {
       console.error("Error signing out:", error);
-      toast.error(`Error signing out: ${error.message}`);
+      toast.error(`Error signing out: ${error.message}`, {
+        toastId: 'signout-error'
+      });
     } finally {
       setLoading(false);
     }
@@ -262,10 +320,14 @@ export function AuthProvider({ children }) {
       
       if (error) throw error;
       
-      toast.success('Password reset link sent to your email');
+      toast.success('Password reset link sent to your email', {
+        toastId: 'password-reset-success'
+      });
     } catch (error) {
       console.error("Error resetting password:", error);
-      toast.error(`Failed to send reset email: ${error.message}`);
+      toast.error(`Failed to send reset email: ${error.message}`, {
+        toastId: 'password-reset-error'
+      });
     } finally {
       setLoading(false);
     }
@@ -294,10 +356,14 @@ export function AuthProvider({ children }) {
         });
       }
       
-      toast.success('Profile updated successfully!');
+      toast.success('Profile updated successfully!', {
+        toastId: 'profile-update-success'
+      });
     } catch (error) {
       console.error("Error updating profile:", error);
-      toast.error(`Failed to update profile: ${error.message}`);
+      toast.error(`Failed to update profile: ${error.message}`, {
+        toastId: 'profile-update-error'
+      });
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabaseClient';
@@ -84,8 +84,8 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-2 sm:px-4">
         <div className="flex justify-between items-center h-14">
           <Link to="/" className="flex items-center">
-            <img src="/images/logo.png" alt="Company Logo" className="h-8 mr-3" />
-            <span className="font-bold text-lg">NFT Marketplace</span>
+            <img src="/images/image.png" alt="Company Logo" className="h-8 mr-3" />
+
           </Link>
           
           {/* Mobile menu button */}

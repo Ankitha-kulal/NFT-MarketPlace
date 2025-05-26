@@ -37,7 +37,7 @@ const Home = () => {
         
         {/* Footer */}
         <div className="footer">
-          © 2025 NFT Platform • The Home for Digital Collectibles
+          © 2025 NFTVerse • The Home for Digital Collectibles
         </div>
       </div>
     </div>
