@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient';
 import { ethers } from 'ethers';
 import { useWeb3 } from '../context/Web3Context';
 import { PINATA_GATEWAY } from '../config';
+import CryptoJS from 'crypto-js'; // You'll need to install: npm install crypto-js
 
 const NFTCreate = () => {
   const [title, setTitle] = useState('');
@@ -17,13 +18,13 @@ const NFTCreate = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [userId, setUserId] = useState(null);
   const [txStatus, setTxStatus] = useState('');
-  const [royaltyPercentage, setRoyaltyPercentage] = useState('10'); // Default 10%
+  const [royaltyPercentage, setRoyaltyPercentage] = useState('10');
+  const [isDuplicateCheckLoading, setIsDuplicateCheckLoading] = useState(false);
+  const [duplicateNFT, setDuplicateNFT] = useState(null);
   const navigate = useNavigate();
 
-  // Get Web3 context
   const { account, contract, isCorrectNetwork, connectWallet, switchNetwork } = useWeb3();
 
-  // Get the current user ID when component mounts
   useEffect(() => {
     const getCurrentUser = async () => {
       const { data } = await supabase.auth.getUser();
@@ -34,15 +35,80 @@ const NFTCreate = () => {
     getCurrentUser();
   }, []);
 
-  const handleFileChange = (e) => {
+  // Function to generate image hash
+  const generateImageHash = async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const arrayBuffer = e.target.result;
+        const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
+        const hash = CryptoJS.SHA256(wordArray).toString();
+        resolve(hash);
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  // Function to check for duplicate images
+  const checkForDuplicates = async (imageHash) => {
+    try {
+      setIsDuplicateCheckLoading(true);
+      setTxStatus('Checking for duplicate images...');
+      
+      const { data, error } = await supabase
+        .from('nfts')
+        .select('*')
+        .eq('image_hash', imageHash);
+      
+      if (error) throw error;
+      
+      return data && data.length > 0 ? data[0] : null;
+    } catch (error) {
+      console.error("Error checking for duplicates:", error);
+      throw new Error("Failed to check for duplicate images");
+    } finally {
+      setIsDuplicateCheckLoading(false);
+      setTxStatus('');
+    }
+  };
+
+  const handleFileChange = async (e) => {
     const selectedFile = e.target.files[0];
-    // Basic validation for image files
-    if (selectedFile && selectedFile.type.startsWith('image/')) {
-      setFile(selectedFile);
-      setErrorMessage('');
-    } else {
+    
+    if (!selectedFile) {
+      setFile(null);
+      setDuplicateNFT(null);
+      return;
+    }
+    
+    if (!selectedFile.type.startsWith('image/')) {
       setErrorMessage('Please select a valid image file');
       setFile(null);
+      setDuplicateNFT(null);
+      return;
+    }
+    
+    try {
+      setErrorMessage('');
+      setFile(selectedFile);
+      
+      // Generate hash and check for duplicates
+      const imageHash = await generateImageHash(selectedFile);
+      const duplicate = await checkForDuplicates(imageHash);
+      
+      if (duplicate) {
+        setDuplicateNFT(duplicate);
+        setErrorMessage(`⚠️ DUPLICATE DETECTED: This image already exists as NFT "${duplicate.title}" (Token ID: ${duplicate.token_id})`);
+      } else {
+        setDuplicateNFT(null);
+        setSuccessMessage('✅ Image is unique and ready for minting!');
+        setTimeout(() => setSuccessMessage(''), 3000);
+      }
+    } catch (error) {
+      setErrorMessage('Error checking for duplicates: ' + error.message);
+      setFile(null);
+      setDuplicateNFT(null);
     }
   };
 
@@ -97,16 +163,13 @@ const NFTCreate = () => {
     }
   };
 
-  // Modified saveToSupabase function to handle the missing column
   const saveToSupabase = async (nftData) => {
     try {
-      // Remove the blockchain_status field if it's causing issues
       const { blockchain_status, ...filteredData } = nftData;
       
-      // Add a status field instead (assuming this column exists)
       const dataToInsert = {
         ...filteredData,
-        status: blockchain_status // Use a column that actually exists in your table
+        status: blockchain_status
       };
       
       const { data, error } = await supabase
@@ -125,26 +188,21 @@ const NFTCreate = () => {
   const mintNFTOnChain = async (tokenURI, priceInEth) => {
     try {
       setTxStatus('Getting listing fee...');
-      // Get the listing fee from the contract
       const listingFee = await contract.getListingPrice();
       
-      // Convert royalty percentage to basis points (e.g., 10% -> 1000 basis points)
       const royaltyBasisPoints = parseInt(royaltyPercentage) * 100;
       
       setTxStatus('Minting NFT...');
-      // Call the mintNFT function with listing fee as value
       const tx = await contract.mintNFT(
-        tokenURI,                // Metadata URI
-        account,                 // Royalty receiver (current user)
-        royaltyBasisPoints,      // Royalty fee in basis points
-        { value: listingFee }    // Pay the listing fee
+        tokenURI,
+        account,
+        royaltyBasisPoints,
+        { value: listingFee }
       );
       
       setTxStatus('Waiting for transaction confirmation...');
-      // Wait for transaction to be confirmed
       const receipt = await tx.wait();
       
-      // Find the NFTMinted event to get the tokenId
       const event = receipt.logs
         .filter(log => log.fragment && log.fragment.name === 'NFTMinted')
         .map(log => log.args);
@@ -152,13 +210,9 @@ const NFTCreate = () => {
       if (event && event.length > 0) {
         const tokenId = event[0].tokenId;
         
-        // If price is set, list the NFT for sale
         if (priceInEth && priceInEth > 0) {
           setTxStatus('Listing NFT for sale...');
-          // Convert ETH price to wei
           const priceInWei = ethers.parseEther(priceInEth.toString());
-          
-          // List the NFT for sale
           const listTx = await contract.listNFT(tokenId, priceInWei);
           await listTx.wait();
         }
@@ -175,14 +229,17 @@ const NFTCreate = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    // Check if wallet is connected and on the correct network
+  const proceedWithMinting = async (listForSale = false) => {
+    // Block minting if duplicate is detected
+    if (duplicateNFT) {
+      setErrorMessage('❌ Cannot mint duplicate NFT. This image already exists on the blockchain!');
+      return;
+    }
+
     if (!account) {
       try {
         await connectWallet();
-        return; // Return early to let the connect effect happen
+        return;
       } catch (error) {
         setErrorMessage("Please connect your wallet to continue");
         return;
@@ -199,10 +256,18 @@ const NFTCreate = () => {
       return;
     }
     
+    if (listForSale && (!price || parseFloat(price) <= 0)) {
+      setErrorMessage('Please enter a valid price for listing');
+      return;
+    }
+    
     try {
       setIsLoading(true);
       setErrorMessage('');
       setSuccessMessage('');
+      
+      // Generate image hash for storage
+      const imageHash = await generateImageHash(file);
       
       // Upload image to IPFS via Pinata
       setTxStatus('Uploading image to IPFS...');
@@ -223,134 +288,57 @@ const NFTCreate = () => {
       const metadataHash = await uploadMetadataToPinata(metadata);
       const metadataUrl = `${PINATA_GATEWAY}${metadataHash}`;
       
-      // Mint NFT on the blockchain (but don't list for sale)
-      const tokenId = await mintNFTOnChain(metadataUrl, 0);
+      // Mint NFT on the blockchain
+      const tokenId = await mintNFTOnChain(metadataUrl, listForSale ? price : 0);
       
-      // Save metadata to Supabase
+      // Save metadata to Supabase with image hash
       const nftData = {
         title,
         category,
         description,
-        price: 0, // Not for sale
+        price: listForSale ? parseFloat(price) : 0,
         image_url: imageUrl,
         metadata_url: metadataUrl,
         ipfs_hash: ipfsHash,
         metadata_hash: metadataHash,
+        image_hash: imageHash, // Store the image hash for duplicate detection
         creator_id: userId,
         owner_id: userId,
         created_at: new Date(),
         token_id: tokenId,
         contract_address: contract.target,
-        blockchain_status: 'minted', // This field will be handled in saveToSupabase
-        for_sale: false,
+        blockchain_status: listForSale ? 'listed' : 'minted',
+        for_sale: listForSale,
         royalty_percentage: parseInt(royaltyPercentage)
       };
       
       await saveToSupabase(nftData);
       
-      // Success!
-      setSuccessMessage("NFT created and minted successfully!");
-      setTimeout(() => navigate('/nft-hub'), 2000);
+      setSuccessMessage(listForSale ? 
+        "NFT created, minted and listed for sale successfully!" : 
+        "NFT created and minted successfully!"
+      );
+      setTimeout(() => navigate('/Marketplace'), 2000);
     } catch (error) {
       setErrorMessage(error.message || 'An error occurred while creating the NFT');
     } finally {
       setIsLoading(false);
       setTxStatus('');
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await proceedWithMinting(false);
   };
 
   const handleSaveAndSell = async (e) => {
     e.preventDefault();
-    
-    // Check if wallet is connected and on the correct network
-    if (!account) {
-      try {
-        await connectWallet();
-        return; // Return early to let the connect effect happen
-      } catch (error) {
-        setErrorMessage("Please connect your wallet to continue");
-        return;
-      }
-    }
-    
-    if (!isCorrectNetwork) {
-      setErrorMessage("Please switch to the correct network");
-      await switchNetwork();
-      return;
-    }
-    
-    if (!file) {
-      setErrorMessage('Please select an image file');
-      return;
-    }
-    
-    if (!price || parseFloat(price) <= 0) {
-      setErrorMessage('Please enter a valid price');
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      setErrorMessage('');
-      setSuccessMessage('');
-      
-      // Upload image to IPFS via Pinata
-      setTxStatus('Uploading image to IPFS...');
-      const ipfsHash = await uploadToPinata(file);
-      const imageUrl = `${PINATA_GATEWAY}${ipfsHash}`;
-      
-      // Create and upload metadata
-      setTxStatus('Creating NFT metadata...');
-      const metadata = {
-        name: title,
-        description: description,
-        image: imageUrl,
-        attributes: [
-          { trait_type: "Category", value: category }
-        ]
-      };
-      
-      const metadataHash = await uploadMetadataToPinata(metadata);
-      const metadataUrl = `${PINATA_GATEWAY}${metadataHash}`;
-      
-      // Mint NFT on the blockchain and list for sale
-      const tokenId = await mintNFTOnChain(metadataUrl, price);
-      
-      // Save metadata to Supabase
-      const nftData = {
-        title,
-        category,
-        description,
-        price: parseFloat(price),
-        image_url: imageUrl,
-        metadata_url: metadataUrl,
-        ipfs_hash: ipfsHash,
-        metadata_hash: metadataHash,
-        creator_id: userId,
-        owner_id: userId,
-        created_at: new Date(),
-        token_id: tokenId,
-        contract_address: contract.target,
-        blockchain_status: 'listed', // This field will be handled in saveToSupabase
-        for_sale: true,
-        royalty_percentage: parseInt(royaltyPercentage)
-      };
-      
-      await saveToSupabase(nftData);
-      
-      // Success!
-      setSuccessMessage("NFT created, minted and listed for sale successfully!");
-      setTimeout(() => navigate('/nft-hub'), 2000);
-    } catch (error) {
-      setErrorMessage(error.message || 'An error occurred while creating the NFT');
-    } finally {
-      setIsLoading(false);
-      setTxStatus('');
-    }
+    await proceedWithMinting(true);
   };
 
   const handleCancel = () => {
-    navigate('/nft-hub');
+    navigate('/Marketplace');
   };
 
   // Display wallet connection button if not connected
@@ -415,12 +403,24 @@ const NFTCreate = () => {
           </div>
         )}
         
-        {txStatus && (
+        {(txStatus || isDuplicateCheckLoading) && (
           <div className="card-panel blue lighten-4 blue-text text-darken-4">
             <div className="progress">
               <div className="indeterminate"></div>
             </div>
-            <p><i className="material-icons left">sync</i> {txStatus}</p>
+            <p><i className="material-icons left">sync</i> {txStatus || 'Checking for duplicates...'}</p>
+          </div>
+        )}
+
+        {/* Duplicate Warning */}
+        {duplicateNFT && (
+          <div className="card-panel orange lighten-4 orange-text text-darken-4">
+            <h6><i className="material-icons left">warning</i> Duplicate NFT Detected!</h6>
+            <p><strong>This image already exists as:</strong></p>
+            <p>• Title: {duplicateNFT.title}</p>
+            <p>• Token ID: {duplicateNFT.token_id}</p>
+            <p>• Category: {duplicateNFT.category}</p>
+            <p><strong>NFTs must be unique. Please select a different image.</strong></p>
           </div>
         )}
         
@@ -440,8 +440,19 @@ const NFTCreate = () => {
               <img 
                 src={URL.createObjectURL(file)} 
                 alt="NFT Preview" 
-                style={{ maxHeight: '200px', maxWidth: '100%', objectFit: 'contain' }} 
+                style={{ 
+                  maxHeight: '200px', 
+                  maxWidth: '100%', 
+                  objectFit: 'contain',
+                  border: duplicateNFT ? '3px solid #ff9800' : '3px solid #4caf50',
+                  borderRadius: '8px'
+                }} 
               />
+              {duplicateNFT && (
+                <p className="red-text" style={{ marginTop: '10px' }}>
+                  <i className="material-icons tiny">warning</i> This image is a duplicate
+                </p>
+              )}
             </div>
           )}
 
@@ -498,18 +509,18 @@ const NFTCreate = () => {
           <div className="row center">
             <button 
               type="submit" 
-              className="btn green darken-2" 
+              className={`btn ${duplicateNFT ? 'grey' : 'green darken-2'}`}
               style={{ marginRight: '10px' }}
-              disabled={isLoading}
+              disabled={isLoading || duplicateNFT || isDuplicateCheckLoading}
             >
               <i className="material-icons left">save</i> Mint NFT
               {isLoading && <span className="spinner"></span>}
             </button>
             <button 
               type="button" 
-              className="btn blue darken-2"
+              className={`btn ${duplicateNFT ? 'grey' : 'blue darken-2'}`}
               onClick={handleSaveAndSell}
-              disabled={isLoading}
+              disabled={isLoading || duplicateNFT || isDuplicateCheckLoading}
               style={{ marginRight: '10px' }}
             >
               <i className="material-icons left">sell</i> Mint & List for Sale
