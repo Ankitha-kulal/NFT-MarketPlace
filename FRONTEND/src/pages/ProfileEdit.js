@@ -151,7 +151,7 @@ const ProfileEdit = () => {
           
           // Get public URL
           const { data: urlData } = supabase.storage
-            .from('covers')
+            .from('cover')
             .getPublicUrl(fileName);
             
           setCoverImage(urlData.publicUrl);

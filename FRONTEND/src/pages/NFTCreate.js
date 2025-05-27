@@ -5,7 +5,7 @@ import { supabase } from '../supabaseClient';
 import { ethers } from 'ethers';
 import { useWeb3 } from '../context/Web3Context';
 import { PINATA_GATEWAY } from '../config';
-import CryptoJS from 'crypto-js'; // You'll need to install: npm install crypto-js
+import CryptoJS from 'crypto-js';
 
 const NFTCreate = () => {
   const [title, setTitle] = useState('');
@@ -35,7 +35,6 @@ const NFTCreate = () => {
     getCurrentUser();
   }, []);
 
-  // Function to generate image hash
   const generateImageHash = async (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -50,7 +49,6 @@ const NFTCreate = () => {
     });
   };
 
-  // Function to check for duplicate images
   const checkForDuplicates = async (imageHash) => {
     try {
       setIsDuplicateCheckLoading(true);
@@ -93,7 +91,6 @@ const NFTCreate = () => {
       setErrorMessage('');
       setFile(selectedFile);
       
-      // Generate hash and check for duplicates
       const imageHash = await generateImageHash(selectedFile);
       const duplicate = await checkForDuplicates(imageHash);
       
@@ -230,7 +227,6 @@ const NFTCreate = () => {
   };
 
   const proceedWithMinting = async (listForSale = false) => {
-    // Block minting if duplicate is detected
     if (duplicateNFT) {
       setErrorMessage('❌ Cannot mint duplicate NFT. This image already exists on the blockchain!');
       return;
@@ -266,15 +262,12 @@ const NFTCreate = () => {
       setErrorMessage('');
       setSuccessMessage('');
       
-      // Generate image hash for storage
       const imageHash = await generateImageHash(file);
       
-      // Upload image to IPFS via Pinata
       setTxStatus('Uploading image to IPFS...');
       const ipfsHash = await uploadToPinata(file);
       const imageUrl = `${PINATA_GATEWAY}${ipfsHash}`;
       
-      // Create and upload metadata
       setTxStatus('Creating NFT metadata...');
       const metadata = {
         name: title,
@@ -288,10 +281,8 @@ const NFTCreate = () => {
       const metadataHash = await uploadMetadataToPinata(metadata);
       const metadataUrl = `${PINATA_GATEWAY}${metadataHash}`;
       
-      // Mint NFT on the blockchain
       const tokenId = await mintNFTOnChain(metadataUrl, listForSale ? price : 0);
       
-      // Save metadata to Supabase with image hash
       const nftData = {
         title,
         category,
@@ -301,7 +292,7 @@ const NFTCreate = () => {
         metadata_url: metadataUrl,
         ipfs_hash: ipfsHash,
         metadata_hash: metadataHash,
-        image_hash: imageHash, // Store the image hash for duplicate detection
+        image_hash: imageHash,
         creator_id: userId,
         owner_id: userId,
         created_at: new Date(),
@@ -341,23 +332,84 @@ const NFTCreate = () => {
     navigate('/Marketplace');
   };
 
-  // Display wallet connection button if not connected
+  // Wallet connection screen
   if (!account) {
     return (
-      <div className="container center-align" style={{ marginTop: '50px' }}>
-        <div className="card z-depth-3" style={{ padding: '20px', borderRadius: '20px', maxWidth: '500px', margin: '0 auto' }}>
-          <h4 className="black-text">Connect Wallet</h4>
-          <p>Please connect your wallet to create an NFT</p>
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #2d1b4e 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px'
+      }}>
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.03)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '24px',
+          padding: '40px',
+          maxWidth: '500px',
+          width: '100%',
+          textAlign: 'center',
+          boxShadow: '0 25px 50px rgba(0, 0, 0, 0.3)'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            borderRadius: '50%',
+            width: '80px',
+            height: '80px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 24px',
+            fontSize: '32px'
+          }}>
+            👛
+          </div>
+          <h2 style={{ color: '#ffffff', marginBottom: '16px', fontSize: '28px', fontWeight: '700' }}>
+            Connect Your Wallet
+          </h2>
+          <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '32px', fontSize: '16px' }}>
+            Connect your Web3 wallet to start creating and minting NFTs
+          </p>
           <button 
-            className="btn blue darken-2 waves-effect waves-light"
             onClick={connectWallet}
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              border: 'none',
+              borderRadius: '16px',
+              padding: '16px 32px',
+              color: 'white',
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              transform: 'translateY(0)',
+              boxShadow: '0 10px 25px rgba(102, 126, 234, 0.3)'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 15px 35px rgba(102, 126, 234, 0.4)';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 10px 25px rgba(102, 126, 234, 0.3)';
+            }}
           >
-            <i className="material-icons left">account_balance_wallet</i>
             Connect Wallet
           </button>
           {errorMessage && (
-            <div className="card-panel red lighten-4 red-text text-darken-4 mt-3">
-              <i className="material-icons left">error</i> {errorMessage}
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '12px',
+              padding: '16px',
+              color: '#ef4444',
+              marginTop: '24px',
+              fontSize: '14px'
+            }}>
+              ⚠️ {errorMessage}
             </div>
           )}
         </div>
@@ -365,18 +417,71 @@ const NFTCreate = () => {
     );
   }
 
-  // Display network switch button if on wrong network
+  // Wrong network screen
   if (!isCorrectNetwork) {
     return (
-      <div className="container center-align" style={{ marginTop: '50px' }}>
-        <div className="card z-depth-3" style={{ padding: '20px', borderRadius: '20px', maxWidth: '500px', margin: '0 auto' }}>
-          <h4 className="black-text">Wrong Network</h4>
-          <p>Please switch to the Sepolia test network to continue</p>
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #2d1b4e 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px'
+      }}>
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.03)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '24px',
+          padding: '40px',
+          maxWidth: '500px',
+          width: '100%',
+          textAlign: 'center',
+          boxShadow: '0 25px 50px rgba(0, 0, 0, 0.3)'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
+            borderRadius: '50%',
+            width: '80px',
+            height: '80px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 24px',
+            fontSize: '32px'
+          }}>
+            🔗
+          </div>
+          <h2 style={{ color: '#ffffff', marginBottom: '16px', fontSize: '28px', fontWeight: '700' }}>
+            Wrong Network
+          </h2>
+          <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '32px', fontSize: '16px' }}>
+            Please switch to the Sepolia test network to continue creating NFTs
+          </p>
           <button 
-            className="btn orange darken-2 waves-effect waves-light"
             onClick={switchNetwork}
+            style={{
+              background: 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
+              border: 'none',
+              borderRadius: '16px',
+              padding: '16px 32px',
+              color: 'white',
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              transform: 'translateY(0)',
+              boxShadow: '0 10px 25px rgba(245, 158, 11, 0.3)'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 15px 35px rgba(245, 158, 11, 0.4)';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 10px 25px rgba(245, 158, 11, 0.3)';
+            }}
           >
-            <i className="material-icons left">swap_horiz</i>
             Switch Network
           </button>
         </div>
@@ -384,158 +489,631 @@ const NFTCreate = () => {
     );
   }
 
+  // Main NFT creation form
   return (
-    <div className="black-text container" style={{ display: 'flex', justifyContent: 'center', marginTop: '50px' }}>
-      <div className="card z-depth-3" style={{ padding: '20px', borderRadius: '20px', maxWidth: '600px', width: '100%' }}>
-        <h4 className="black-text center" style={{ fontWeight: 'bold' }}>
-          <i className="material-icons left">add_a_photo</i> Create NFT
-        </h4>
-        
-        {errorMessage && (
-          <div className="card-panel red lighten-4 red-text text-darken-4">
-            <i className="material-icons left">error</i> {errorMessage}
-          </div>
-        )}
-        
-        {successMessage && (
-          <div className="card-panel green lighten-4 green-text text-darken-4">
-            <i className="material-icons left">check_circle</i> {successMessage}
-          </div>
-        )}
-        
-        {(txStatus || isDuplicateCheckLoading) && (
-          <div className="card-panel blue lighten-4 blue-text text-darken-4">
-            <div className="progress">
-              <div className="indeterminate"></div>
-            </div>
-            <p><i className="material-icons left">sync</i> {txStatus || 'Checking for duplicates...'}</p>
-          </div>
-        )}
-
-        {/* Duplicate Warning */}
-        {duplicateNFT && (
-          <div className="card-panel orange lighten-4 orange-text text-darken-4">
-            <h6><i className="material-icons left">warning</i> Duplicate NFT Detected!</h6>
-            <p><strong>This image already exists as:</strong></p>
-            <p>• Title: {duplicateNFT.title}</p>
-            <p>• Token ID: {duplicateNFT.token_id}</p>
-            <p>• Category: {duplicateNFT.category}</p>
-            <p><strong>NFTs must be unique. Please select a different image.</strong></p>
-          </div>
-        )}
-        
-        <form onSubmit={handleSubmit}>
-          <div className="file-field input-field">
-            <div className="btn blue darken-2">
-              <span><i className="material-icons left">file_upload</i> Select File</span>
-              <input type="file" accept="image/*" onChange={handleFileChange} required />
-            </div>
-            <div className="file-path-wrapper">
-              <input className="file-path validate" type="text" placeholder="Upload NFT image" />
-            </div>
-          </div>
-
-          {file && (
-            <div className="center-align" style={{ marginBottom: '20px' }}>
-              <img 
-                src={URL.createObjectURL(file)} 
-                alt="NFT Preview" 
-                style={{ 
-                  maxHeight: '200px', 
-                  maxWidth: '100%', 
-                  objectFit: 'contain',
-                  border: duplicateNFT ? '3px solid #ff9800' : '3px solid #4caf50',
-                  borderRadius: '8px'
-                }} 
-              />
-              {duplicateNFT && (
-                <p className="red-text" style={{ marginTop: '10px' }}>
-                  <i className="material-icons tiny">warning</i> This image is a duplicate
-                </p>
-              )}
-            </div>
-          )}
-
-          <div className="input-field">
-            <i className="material-icons prefix">title</i>
-            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required />
-            <label className={title ? "active" : ""}>Title</label>
-          </div>
-
-          <div className="input-field">
-            <i className="material-icons prefix">category</i>
-            <input type="text" value={category} onChange={(e) => setCategory(e.target.value)} required />
-            <label className={category ? "active" : ""}>Category</label>
-          </div>
-
-          <div className="input-field">
-            <i className="material-icons prefix">description</i>
-            <textarea 
-              className="materialize-textarea" 
-              value={description} 
-              onChange={(e) => setDescription(e.target.value)} 
-              required
-            ></textarea>
-            <label className={description ? "active" : ""}>Description</label>
-          </div>
-
-          <div className="input-field">
-            <i className="material-icons prefix">attach_money</i>
-            <input 
-              type="number" 
-              step="0.001" 
-              min="0" 
-              value={price} 
-              onChange={(e) => setPrice(e.target.value)} 
-              required 
-            />
-            <label className={price ? "active" : ""}>Price (ETH)</label>
-          </div>
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #2d1b4e 100%)',
+      padding: '40px 20px'
+    }}>
+      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.03)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: '24px',
+          padding: '40px',
+          boxShadow: '0 25px 50px rgba(0, 0, 0, 0.3)',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          {/* Background gradient overlay */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '120px',
+            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+            borderRadius: '24px 24px 0 0'
+          }} />
           
-          <div className="input-field">
-            <i className="material-icons prefix">copyright</i>
-            <input 
-              type="number" 
-              step="1" 
-              min="0" 
-              max="30"
-              value={royaltyPercentage} 
-              onChange={(e) => setRoyaltyPercentage(e.target.value)} 
-              required 
-            />
-            <label className={royaltyPercentage ? "active" : ""}>Royalty Percentage (%)</label>
-          </div>
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+              <div style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '50%',
+                width: '64px',
+                height: '64px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px',
+                fontSize: '24px'
+              }}>
+                🎨
+              </div>
+              <h1 style={{ 
+                color: '#ffffff', 
+                fontSize: '32px', 
+                fontWeight: '700',
+                margin: '0',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent'
+              }}>
+                Create Your NFT
+              </h1>
+              <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '16px', margin: '8px 0 0' }}>
+                Mint unique digital assets on the blockchain
+              </p>
+            </div>
 
-          <div className="row center">
-            <button 
-              type="submit" 
-              className={`btn ${duplicateNFT ? 'grey' : 'green darken-2'}`}
-              style={{ marginRight: '10px' }}
-              disabled={isLoading || duplicateNFT || isDuplicateCheckLoading}
-            >
-              <i className="material-icons left">save</i> Mint NFT
-              {isLoading && <span className="spinner"></span>}
-            </button>
-            <button 
-              type="button" 
-              className={`btn ${duplicateNFT ? 'grey' : 'blue darken-2'}`}
-              onClick={handleSaveAndSell}
-              disabled={isLoading || duplicateNFT || isDuplicateCheckLoading}
-              style={{ marginRight: '10px' }}
-            >
-              <i className="material-icons left">sell</i> Mint & List for Sale
-              {isLoading && <span className="spinner"></span>}
-            </button>
-            <button 
-              type="button" 
-              onClick={handleCancel} 
-              className="btn red darken-2"
-            >
-              <i className="material-icons left">cancel</i> Cancel
-            </button>
+            {/* Status Messages */}
+            {errorMessage && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '16px',
+                padding: '20px',
+                color: '#ef4444',
+                marginBottom: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                fontSize: '14px'
+              }}>
+                <span style={{ fontSize: '18px' }}>⚠️</span>
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {successMessage && (
+              <div style={{
+                background: 'rgba(34, 197, 94, 0.1)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                borderRadius: '16px',
+                padding: '20px',
+                color: '#22c55e',
+                marginBottom: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                fontSize: '14px'
+              }}>
+                <span style={{ fontSize: '18px' }}>✅</span>
+                <span>{successMessage}</span>
+              </div>
+            )}
+
+            {(txStatus || isDuplicateCheckLoading) && (
+              <div style={{
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: '16px',
+                padding: '20px',
+                color: '#3b82f6',
+                marginBottom: '24px'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    border: '2px solid rgba(59, 130, 246, 0.3)',
+                    borderTop: '2px solid #3b82f6',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  <span>{txStatus || 'Checking for duplicates...'}</span>
+                </div>
+                <div style={{
+                  width: '100%',
+                  height: '4px',
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  borderRadius: '2px',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{
+                    width: '100%',
+                    height: '100%',
+                    background: 'linear-gradient(90deg, transparent, #3b82f6, transparent)',
+                    animation: 'shimmer 2s infinite'
+                  }} />
+                </div>
+              </div>
+            )}
+
+            {/* Duplicate Warning */}
+            {duplicateNFT && (
+              <div style={{
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                borderRadius: '16px',
+                padding: '24px',
+                color: '#f59e0b',
+                marginBottom: '24px'
+              }}>
+                <h3 style={{ 
+                  margin: '0 0 16px', 
+                  fontSize: '18px', 
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <span style={{ fontSize: '20px' }}>⚠️</span>
+                  Duplicate NFT Detected!
+                </h3>
+                <div style={{ fontSize: '14px', lineHeight: '1.6' }}>
+                  <p style={{ margin: '0 0 12px' }}><strong>This image already exists as:</strong></p>
+                  <p style={{ margin: '4px 0' }}>• Title: {duplicateNFT.title}</p>
+                  <p style={{ margin: '4px 0' }}>• Token ID: {duplicateNFT.token_id}</p>
+                  <p style={{ margin: '4px 0' }}>• Category: {duplicateNFT.category}</p>
+                  <p style={{ margin: '12px 0 0', fontWeight: '600' }}>
+                    NFTs must be unique. Please select a different image.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* File Upload */}
+              <div>
+                <label style={{ 
+                  display: 'block', 
+                  color: '#ffffff', 
+                  fontSize: '16px', 
+                  fontWeight: '600', 
+                  marginBottom: '12px' 
+                }}>
+                  Upload Image
+                </label>
+                <div style={{
+                  border: `2px dashed ${file ? (duplicateNFT ? '#f59e0b' : '#22c55e') : 'rgba(255, 255, 255, 0.3)'}`,
+                  borderRadius: '16px',
+                  padding: '40px',
+                  textAlign: 'center',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer',
+                  position: 'relative'
+                }}>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleFileChange} 
+                    required 
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      opacity: 0,
+                      cursor: 'pointer'
+                    }}
+                  />
+                  {file ? (
+                    <div>
+                      <img 
+                        src={URL.createObjectURL(file)} 
+                        alt="NFT Preview" 
+                        style={{ 
+                          maxHeight: '200px', 
+                          maxWidth: '100%', 
+                          objectFit: 'contain',
+                          borderRadius: '12px',
+                          border: duplicateNFT ? '3px solid #f59e0b' : '3px solid #22c55e',
+                          marginBottom: '16px'
+                        }} 
+                      />
+                      {duplicateNFT && (
+                        <p style={{ color: '#f59e0b', fontSize: '14px', margin: '0' }}>
+                          ⚠️ This image is a duplicate
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ fontSize: '48px', marginBottom: '16px' }}>📸</div>
+                      <p style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '16px', margin: '0' }}>
+                        Click to upload or drag and drop your image
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Form Fields */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                <div>
+                  <label style={{ 
+                    display: 'block', 
+                    color: '#ffffff', 
+                    fontSize: '16px', 
+                    fontWeight: '600', 
+                    marginBottom: '8px' 
+                  }}>
+                    Title
+                  </label>
+                  <input 
+                    type="text" 
+                    value={title} 
+                    onChange={(e) => setTitle(e.target.value)} 
+                    required 
+                    style={{
+                      width: '100%',
+                      padding: '16px',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '12px',
+                      color: '#ffffff',
+                      fontSize: '16px',
+                      transition: 'all 0.3s ease',
+                      outline: 'none'
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#667eea';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                      e.target.style.boxShadow = 'none';
+                    }}
+                    placeholder="Enter NFT title"
+                  />
+                </div>
+
+                <div>
+                  <label style={{ 
+                    display: 'block', 
+                    color: '#ffffff', 
+                    fontSize: '16px', 
+                    fontWeight: '600', 
+                    marginBottom: '8px' 
+                  }}>
+                    Category
+                  </label>
+                  <input 
+                    type="text" 
+                    value={category} 
+                    onChange={(e) => setCategory(e.target.value)} 
+                    required 
+                    style={{
+                      width: '100%',
+                      padding: '16px',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '12px',
+                      color: '#ffffff',
+                      fontSize: '16px',
+                      transition: 'all 0.3s ease',
+                      outline: 'none'
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#667eea';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                      e.target.style.boxShadow = 'none';
+                    }}
+                    placeholder="e.g., Art, Photography, Music"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ 
+                  display: 'block', 
+                  color: '#ffffff', 
+                  fontSize: '16px', 
+                  fontWeight: '600', 
+                  marginBottom: '8px' 
+                }}>
+                  Description
+                </label>
+                <textarea 
+                  value={description} 
+                  onChange={(e) => setDescription(e.target.value)} 
+                  required
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: '12px',
+                    color: '#ffffff',
+                    fontSize: '16px',
+                    transition: 'all 0.3s ease',
+                    outline: 'none',
+                    resize: 'vertical',
+                    fontFamily: 'inherit'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#667eea';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                  placeholder="Describe your NFT in detail..."
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                <div>
+                  <label style={{ 
+                    display: 'block', 
+                    color: '#ffffff', 
+                    fontSize: '16px', 
+                    fontWeight: '600', 
+                    marginBottom: '8px' 
+                  }}>
+                    Price (ETH)
+                  </label>
+                  <input 
+                    type="number" 
+                    step="0.001" 
+                    min="0" 
+                    value={price} 
+                    onChange={(e) => setPrice(e.target.value)} 
+                    required 
+                    style={{
+                      width: '100%',
+                      padding: '16px',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '12px',
+                      color: '#ffffff',
+                      fontSize: '16px',
+                      transition: 'all 0.3s ease',
+                      outline: 'none'
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#667eea';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                      e.target.style.boxShadow = 'none';
+                    }}
+                    placeholder="0.001"
+                  />
+                </div>
+
+                <div>
+                  <label style={{ 
+                    display: 'block', 
+                    color: '#ffffff', 
+                    fontSize: '16px', 
+                    fontWeight: '600', 
+                    marginBottom: '8px' 
+                  }}>
+                    Royalty Percentage (%)
+                  </label>
+                  <input 
+                    type="number" 
+                    step="1" 
+                    min="0" 
+                    max="30"
+                    value={royaltyPercentage} 
+                    onChange={(e) => setRoyaltyPercentage(e.target.value)} 
+                    required 
+                    style={{
+                      width: '100%',
+                      padding: '16px',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '12px',
+                      color: '#ffffff',
+                      fontSize: '16px',
+                      transition: 'all 0.3s ease',
+                      outline: 'none'
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#667eea';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                      e.target.style.boxShadow = 'none';
+                    }}
+                    placeholder="10"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ 
+                display: 'flex', 
+                gap: '16px', 
+                marginTop: '32px',
+                flexWrap: 'wrap',
+                justifyContent: 'center'
+              }}>
+                <button 
+                  type="submit" 
+                  disabled={isLoading || duplicateNFT || isDuplicateCheckLoading}
+                  style={{
+                    background: duplicateNFT ? 'rgba(107, 114, 128, 0.3)' : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                    border: 'none',
+                    borderRadius: '16px',
+                    padding: '16px 32px',
+                    color: 'white',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: duplicateNFT ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.3s ease',
+                    transform: 'translateY(0)',
+                    boxShadow: duplicateNFT ? 'none' : '0 10px 25px rgba(34, 197, 94, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    minWidth: '160px',
+                    justifyContent: 'center'
+                  }}
+                  onMouseOver={(e) => {
+                    if (!duplicateNFT && !isLoading && !isDuplicateCheckLoading) {
+                      e.target.style.transform = 'translateY(-2px)';
+                      e.target.style.boxShadow = '0 15px 35px rgba(34, 197, 94, 0.4)';
+                    }
+                  }}
+                  onMouseOut={(e) => {
+                    if (!duplicateNFT && !isLoading && !isDuplicateCheckLoading) {
+                      e.target.style.transform = 'translateY(0)';
+                      e.target.style.boxShadow = '0 10px 25px rgba(34, 197, 94, 0.3)';
+                    }
+                  }}
+                >
+                  {isLoading ? (
+                    <>
+                      <div style={{
+                        width: '16px',
+                        height: '16px',
+                        border: '2px solid rgba(255, 255, 255, 0.3)',
+                        borderTop: '2px solid white',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }} />
+                      Minting...
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: '18px' }}>🎯</span>
+                      Mint NFT
+                    </>
+                  )}
+                </button>
+
+                <button 
+                  type="button" 
+                  onClick={handleSaveAndSell}
+                  disabled={isLoading || duplicateNFT || isDuplicateCheckLoading}
+                  style={{
+                    background: duplicateNFT ? 'rgba(107, 114, 128, 0.3)' : 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                    border: 'none',
+                    borderRadius: '16px',
+                    padding: '16px 32px',
+                    color: 'white',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: duplicateNFT ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.3s ease',
+                    transform: 'translateY(0)',
+                    boxShadow: duplicateNFT ? 'none' : '0 10px 25px rgba(59, 130, 246, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    minWidth: '200px',
+                    justifyContent: 'center'
+                  }}
+                  onMouseOver={(e) => {
+                    if (!duplicateNFT && !isLoading && !isDuplicateCheckLoading) {
+                      e.target.style.transform = 'translateY(-2px)';
+                      e.target.style.boxShadow = '0 15px 35px rgba(59, 130, 246, 0.4)';
+                    }
+                  }}
+                  onMouseOut={(e) => {
+                    if (!duplicateNFT && !isLoading && !isDuplicateCheckLoading) {
+                      e.target.style.transform = 'translateY(0)';
+                      e.target.style.boxShadow = '0 10px 25px rgba(59, 130, 246, 0.3)';
+                    }
+                  }}
+                >
+                  {isLoading ? (
+                    <>
+                      <div style={{
+                        width: '16px',
+                        height: '16px',
+                        border: '2px solid rgba(255, 255, 255, 0.3)',
+                        borderTop: '2px solid white',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }} />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: '18px' }}>🏪</span>
+                      Mint & List for Sale
+                    </>
+                  )}
+                </button>
+
+                <button 
+                  type="button" 
+                  onClick={handleCancel} 
+                  style={{
+                    background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                    border: 'none',
+                    borderRadius: '16px',
+                    padding: '16px 32px',
+                    color: 'white',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    transform: 'translateY(0)',
+                    boxShadow: '0 10px 25px rgba(239, 68, 68, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    minWidth: '120px',
+                    justifyContent: 'center'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.transform = 'translateY(-2px)';
+                    e.target.style.boxShadow = '0 15px 35px rgba(239, 68, 68, 0.4)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.transform = 'translateY(0)';
+                    e.target.style.boxShadow = '0 10px 25px rgba(239, 68, 68, 0.3)';
+                  }}
+                >
+                  <span style={{ fontSize: '18px' }}>❌</span>
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
+        </div>
       </div>
+
+      {/* CSS Animations */}
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        
+        input::placeholder,
+        textarea::placeholder {
+          color: rgba(255, 255, 255, 0.4);
+        }
+        
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        
+        input[type=number] {
+          -moz-appearance: textfield;
+        }
+      `}</style>
     </div>
   );
 };
